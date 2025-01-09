@@ -1,2 +1,2 @@
-from .HHO_stokes import *
-from .DDR_intface import *
+from .hho import *
+from .ddr import *
