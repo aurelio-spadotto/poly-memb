@@ -53,21 +53,21 @@ Module: mesh_manager
    :show-inheritance:
    :imported-members:
 
-Module: HHO_stokes
-------------------
+Module: solvers
+---------------
 
-.. automodule:: HHO_stokes
+.. automodule:: solvers.hho
    :members:
    :undoc-members:
    :show-inheritance:
+   :imported-members:
 
-Module: DDR_intface
--------------------
-
-.. automodule:: DDR_intface
+.. automodule:: solvers.ddr
    :members:
    :undoc-members:
    :show-inheritance:
+   :imported-members:
+
 
 
 Bibliography

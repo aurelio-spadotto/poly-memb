@@ -12,9 +12,20 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath('../../'))
 #sys.path.insert(0, os.path.abspath('../../mesh_manager'))  # Add the library directories
 #sys.path.insert(0, os.path.abspath('../../solvers'))  # Add the library directories
+
+# Aggiungi i percorsi relativi
+#sys.path.insert(0, os.path.abspath('../../mesh_manager'))
+#sys.path.insert(0, os.path.abspath('../../solvers'))
+
+# Stampa i percorsi dei moduli per verificare quale versione viene caricata
+#import mesh_manager
+#import solvers
+
+#print(f"mesh_manager path: {mesh_manager.__file__}")
+#print(f"solvers path: {solvers.__file__}")
 
 
 # -- Project information -----------------------------------------------------
@@ -54,7 +65,10 @@ autodoc_mock_imports = [
     "matplotlib",
     "pandas",  # add any other external dependencies you want to mock
     "Polygon",
-    "sympy"
+    "sympy",
+]
+mock_modules = [
+    "meshio"
 ]
 # -- Options for HTML output -------------------------------------------------
 
