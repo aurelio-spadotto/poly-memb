@@ -29,18 +29,19 @@ def rotate_90_clockwise(vec):
 
 def calc_intersection(x1, x2, y1, y2, rho):
     """
-    Check if segment on a plane intersects with ball of radius rho.
+    Check if segment on a plane intersects with ball of radius rho
 
-    Parameters:
-    - x1: x coord of point1
-    - x2: x coord of point2
-    - y1: y coord of point1
-    - y2: y coord of point2
-    - rho: disk radius
+    Args:
+        x1  (float): x coord of point1
+        x2  (float): x coord of point2
+        y1  (float): y coord of point1
+        y2  (float): y coord of point2
+        rho (float): disk radius
 
     Returns:
-    - True/False
-    - intersection position
+        boolean: segment is intersected
+        numpy.ndarray: intersection position
+
     """
     # Define variables
     x, y, t= symbols('x y t')
