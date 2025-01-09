@@ -5,6 +5,6 @@ Workflow Organization:
 - on branch gh-pages only the documentation in format html is present. The documentation is deployed by github-pages. Never commit directly to the branch.
 When you have generated the doc, use
 ```
-ghp-import -n -p -f docs/_build/html
+ghp-import -n -p -f docs/build/html
 ```
 to update the branch
