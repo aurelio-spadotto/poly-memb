@@ -66,6 +66,7 @@ autodoc_mock_imports = [
     "pandas",  # add any other external dependencies you want to mock
     "Polygon",
     "sympy",
+    "meshio"
 ]
 mock_modules = [
     "meshio"
