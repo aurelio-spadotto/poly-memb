@@ -176,7 +176,7 @@ class disk_interface:
         return F_bnd
 
 
-    def calc_F_stretching (self):
+    def calc_F_stretching (self, drop_model = False, gamma = 1):
         """
         Calculates nodal force $F_{stretching}$;
         Hooke's elastic law
@@ -197,7 +197,11 @@ class disk_interface:
             tangent = self.coords[p1] - self.coords[p0]
             tangent = tangent/np.linalg.norm(tangent)
 
-            tension = self.k_str*(current_length[ie]-init_length[ie])/init_length[ie]
+            if drop_model:
+                tension = gamma
+            else:
+                tension = self.k_str*(current_length[ie]-init_length[ie])/init_length[ie]
+
             F_str[ie] = F_str[ie] + tension*tangent
             F_str[(ie+1)%N] =F_str[(ie+1)%N] - tension*tangent
 
