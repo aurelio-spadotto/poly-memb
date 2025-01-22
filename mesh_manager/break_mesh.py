@@ -151,13 +151,11 @@ def break_mesh(mesh, intface, execute_fill_side_mask = True, verbose = False): #
     new_mesh.intface_edges = new_mesh.generate_intface_edges()
 
     # set side mask
+    if (verbose):
+       print (">> in fill_side_mask")
     if execute_fill_side_mask:
-        if (verbose):
-            print (">> in fill_side_mask")
         fill_side_mask(new_mesh)
     else:
-        if (verbose):
-            print (">> in fill_side_mask")
         fill_side_mask(new_mesh, only_initialize = True)
 
     return new_mesh
@@ -914,30 +912,31 @@ def fill_side_mask(mesh, only_initialize = False):
                 dof = glob_nodal_dof(mesh, iel, ino)
                 dof_side_mask[dof] = mesh.side_mask[iel]
 
-    if (not only_initialize):
-        # loop until complete exploration
-        done = False
-        it = 0
-        maxit = 10000
-        while (not done and it <maxit):
-            done= True
-            # loop over elements, check if side still to assign and try to assign it
-            for iel in range(len(mesh.elem2node)):
-                side = mesh.side_mask[iel]
-                if (side == -1):
-                    done = False
-                    node_per_elem = len(mesh.elem2node[iel])
-                    # get side of node if defined
-                    for ino in range(node_per_elem):
-                        dof = glob_nodal_dof(mesh, iel, ino)
-                        if (dof_side_mask[dof]>-1):
-                            mesh.side_mask[iel] = dof_side_mask[dof]
-                    # distribute side to nodes
-                    for ino in range(node_per_elem):
-                        dof = glob_nodal_dof(mesh, iel, ino)
-                        dof_side_mask[dof] = mesh.side_mask[iel]
-            it = it + 1
+    # loop until complete exploration
+    done = False
+    it = 0
+    maxit = 10000
+    while (not done and it <maxit):
+        done= True
+        # loop over elements, check if side still to assign and try to assign it
+        for iel in range(len(mesh.elem2node)):
+            side = mesh.side_mask[iel]
+            if (side == -1):
+                done = False
+                node_per_elem = len(mesh.elem2node[iel])
+                # get side of node if defined
+                for ino in range(node_per_elem):
+                    dof = glob_nodal_dof(mesh, iel, ino)
+                    if (dof_side_mask[dof]>-1):
+                        mesh.side_mask[iel] = dof_side_mask[dof]
+                # distribute side to nodes
+                for ino in range(node_per_elem):
+                    dof = glob_nodal_dof(mesh, iel, ino)
+                    dof_side_mask[dof] = mesh.side_mask[iel]
+        it = it + 1
+        if (it == 1 and only_initialize): # execute only first round if only interface elements are to be marked
+            return
 
-        if (it==maxit):
+    if (it==maxit):
              warnings.warn("The procedure to assign side exceeds max iterations")
 
