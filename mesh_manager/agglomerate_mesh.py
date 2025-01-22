@@ -432,25 +432,25 @@ def suppress_elements (elem2node, cuts, list_of_elems):
 
     return new_elem2node, new_cuts
 
-def display_element (mesh, elem, ax, color='black', display_nodes= True):
-    """
-    Display single element
-    Args:
-        mesh (mesh2D): mesh
-        elem (list(int)): element (list of points)
-        ax: axes
-        color: color of edges
-        display_nodes: show indexes of nodes (both local and global)
-    """
-    ax.set_aspect('equal')
-    no_nodes = len(elem)
-    for ino in range(no_nodes):
-        p1 = mesh.coords[elem[ino]]
-        p2 = mesh.coords[elem[(ino+1)%no_nodes]]
-        xE = 0.5*(p1 + p2)
-        if (display_nodes):
-            ax.text(p1[0], p1 [1], str(elem[ino])+","+str(ino), fontsize = 20, color=color)
-        #nTE = mesh.get_edge_normal(iel, ie)
-        ax.arrow(p1[0], p1[1], -p1[0] + p2[0], -p1[1] + p2[1], width = 1e-4, color = color)
+#def display_element (mesh, elem, ax, color='black', display_nodes= True):
+#    """
+#    Display single element
+#    Args:
+#        mesh (mesh2D): mesh
+#        elem (list(int)): element (list of points)
+#        ax: axes
+#        color: color of edges
+#        display_nodes: show indexes of nodes (both local and global)
+#    """
+#    ax.set_aspect('equal')
+#    no_nodes = len(elem)
+#    for ino in range(no_nodes):
+#        p1 = mesh.coords[elem[ino]]
+#        p2 = mesh.coords[elem[(ino+1)%no_nodes]]
+#        xE = 0.5*(p1 + p2)
+#        if (display_nodes):
+#            ax.text(p1[0], p1 [1], str(elem[ino])+","+str(ino), fontsize = 20, color=color)
+#        #nTE = mesh.get_edge_normal(iel, ie)
+#        ax.arrow(p1[0], p1[1], -p1[0] + p2[0], -p1[1] + p2[1], width = 1e-4, color = color)
 
 
