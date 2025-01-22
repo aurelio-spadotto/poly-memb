@@ -153,7 +153,7 @@ class mesh2D:
             connected_elems = []
             for iel1, elem1 in enumerate(self.elem2node):
                 edges1 = self.elem2edge[iel1]
-                if (len( set(edges0).intersection(edges1) )>0 and self.side_mask[iel0]*self.side_mask[iel1]!=-1 and iel0!=iel1):
+                if (len( set(edges0).intersection(edges1) )>0 and self.side_mask[iel0]+self.side_mask[iel1]!=1 and iel0!=iel1):
                     connected_elems.append(iel1)
             elem2elem.append(connected_elems)
 
