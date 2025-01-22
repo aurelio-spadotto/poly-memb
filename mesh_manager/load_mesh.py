@@ -153,7 +153,7 @@ class mesh2D:
             connected_elems = []
             for iel1, elem1 in enumerate(self.elem2node):
                 edges1 = self.elem2edge[iel1]
-                if (len( set(edges0).intersection(edges1) )>0 and self.side_mask[iel0]==self.side_mask[iel1] and iel0!=iel1):
+                if (len( set(edges0).intersection(edges1) )>0 and self.side_mask[iel0]*self.side_mask[iel1]!=-1 and iel0!=iel1):
                     connected_elems.append(iel1)
             elem2elem.append(connected_elems)
 
@@ -378,7 +378,7 @@ def move_critical_points(mesh, rho):
             mesh.coords[ino][0] = new_x
             mesh.coords[ino][1] = new_y
 
-def display_element (mesh, elem, ax, color, display_nodes= True):
+def display_element (mesh, elem, ax, color, width = 1e-4, display_nodes= True):
     """
     Display single element
     """
@@ -391,7 +391,7 @@ def display_element (mesh, elem, ax, color, display_nodes= True):
         if (display_nodes):
             ax.text(p1[0], p1 [1], str(elem[ino])+","+str(ino), fontsize = 20, color=color, clip_on = True)
         #nTE = mesh.get_edge_normal(iel, ie)
-        ax.arrow(p1[0], p1[1], -p1[0] + p2[0], -p1[1] + p2[1], width = 1e-4, color = color)
+        ax.arrow(p1[0], p1[1], -p1[0] + p2[0], -p1[1] + p2[1], width = width, color = color)
         #ax.arrow(xE[0], xE[1], nTE[0], nTE[1], width = 1)
 
 def visualize_mesh(mesh, ax, display_no_nodes = False,\
