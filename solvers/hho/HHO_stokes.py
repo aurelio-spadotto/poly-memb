@@ -615,7 +615,7 @@ def assemble_JP (mesh, verbose = False):
         """
         points = [x0, 0.5*(x0+x1), x1]
         values = [f(p[0], p[1]) for p in points]
-        h = np.linalg.norm(x1-x0) # interval length
+        h = mema.R2_norm(x1-x0) # interval length
         weights = [h/6, 4*h/6, h/6]
         return sum ([value*weight for [value, weight] in zip(values, weights)])
 
@@ -639,7 +639,7 @@ def assemble_JP (mesh, verbose = False):
                                                                               # which is also local idx of its first vertex
         xE0 = mesh.coords[first_elem[local_ie]]
         xE1 = mesh.coords[first_elem[(local_ie+1)%len(first_elem)]]
-        hE = np.linalg.norm (xE1 - xE0)
+        hE = mema.R2_norm (xE1 - xE0)
 
         # get table of DOFs connected to the edge
         # table is a list of lists of the type:
@@ -836,7 +836,7 @@ def assemble_b_gamma(mesh, t_gamma):
             # get edge length
             p1 = mesh.coords[mesh.elem2node[iel_in][local_edge_idx]]
             p2 = mesh.coords[mesh.elem2node[iel_in][(local_edge_idx+1)%len(mesh.elem2node[iel_in])]]
-            hE = np.linalg.norm(p2-p1)
+            hE = mema.R2_norm(p2-p1)
             # update with contribution
             b_gamma[shift_dof_x] = b_gamma[shift_dof_x] + t_gamma[intf_ie][0]*hE
             b_gamma[shift_dof_y] = b_gamma[shift_dof_y] + t_gamma[intf_ie][1]*hE
@@ -1007,7 +1007,7 @@ def visualize_solution (mesh, v_p, fig, axes, cmaps = ["magma", "viridis"], arro
     v_T_y = sol_v[1:2*no_elems:2]
     v_T =[np.array([v_T_x[k], v_T_y[k]]) for k in range(no_elems)]
     # take v norm over elements
-    v_T_norm = [np.linalg.norm(v_T[k]) for k in range(no_elems)]
+    v_T_norm = [mema.R2_norm(v_T[k]) for k in range(no_elems)]
 
     # On first axes represent velocity (colormap on elements + arrows along interface)
     ax = axes[0]
@@ -1221,7 +1221,7 @@ def elem_velocity_energy_norm (mesh, iel, v_h):
     v_T = elem_velocities [0]
     for ie in range(len(elem)):
         v_E = elem_velocities [1+ie]
-        elem_energy_norm_sq += np.linalg.norm(v_T-v_E)**2
+        elem_energy_norm_sq += mema.R2_norm(v_T-v_E)**2
 
     return np.sqrt(elem_energy_norm_sq)
 

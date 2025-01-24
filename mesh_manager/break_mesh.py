@@ -60,7 +60,7 @@ def break_mesh(mesh, intface, execute_fill_side_mask = True, verbose = False): #
     if (verbose):
         print (">> in loop to break elements")
         print (">> initial edge = ", ied_initial)
-    while (np.linalg.norm(exit_point - initial_enter_point) > 1e-10):
+    while (gmi.R2_norm(exit_point - initial_enter_point) > 1e-10):
         # get element to cut as list of points
         elem_to_cut = elem2node[iel_to_cut]
         # cut element
@@ -457,7 +457,7 @@ def check_and_add_new_points (new_coords, new_points):
     for new_point in new_points:
         found = False
         for ino, indexed_point in enumerate(new_coords):
-            if (np.linalg.norm(new_point - indexed_point)<1e-6):
+            if (gmi.R2_norm(new_point - indexed_point)<1e-6):
                 indexes.append(ino)
                 found = True
         if (not found):
@@ -569,7 +569,7 @@ def check_and_add_new_points (new_coords, new_points):
 #        # determine normal of interface edge ied cutting the element
 #        edge_barycenter = 0.5*(intface.coords[(ied+1)%No_intf_edges] + intface.coords[ied])
 #        edge_tangent = intface.coords[(ied+1)%No_intf_edges] - intface.coords[ied]
-#        edge_normal = np.dot(np.array([[0, 1],[-1, 0]]), edge_tangent) / np.linalg.norm(edge_tangent)
+#        edge_normal = np.dot(np.array([[0, 1],[-1, 0]]), edge_tangent) / gmi.R2_norm(edge_tangent)
 #
 #
 #        # return new elems (according to how intf edge cuts elem)

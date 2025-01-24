@@ -56,7 +56,7 @@ class disk_interface:
             p1 = edge[1]
             tangent = self.coords[p1] - self.coords[p0]
             clockwise_90 = np.array([[0, 1],[-1, 0]])
-            normal.append(np.dot(clockwise_90, tangent)/np.linalg.norm(tangent))
+            normal.append(np.dot(clockwise_90, tangent)/gmi.R2_norm(tangent))
 
         return normal
 
@@ -75,8 +75,8 @@ class disk_interface:
             edge_r = self.edges[ino]
             tangent_l = self.coords[edge_l[1]] - self.coords[edge_l[0]]
             tangent_r = self.coords[edge_r[1]] - self.coords[edge_r[0]]
-            norm_l = np.linalg.norm(tangent_l)
-            norm_r = np.linalg.norm(tangent_r)
+            norm_l = gmi.R2_norm(tangent_l)
+            norm_r = gmi.R2_norm(tangent_r)
 
             cos_theta = np.dot(tangent_l, tangent_r)/(norm_l*norm_r)
             curvature.append(np.arccos(cos_theta)/(0.5*(norm_l + norm_r)))
@@ -94,7 +94,7 @@ class disk_interface:
 
         for edge in self.edges:
             tangent = self.coords[edge[1]] - self.coords[edge[0]]
-            edge_length.append(np.linalg.norm(tangent))
+            edge_length.append(gmi.R2_norm(tangent))
 
         return edge_length
 
@@ -116,8 +116,8 @@ class disk_interface:
             edge_r = self.edges[ino]
             tangent_l = self.coords[edge_l[1]] - self.coords[edge_l[0]]
             tangent_r = self.coords[edge_r[1]] - self.coords[edge_r[0]]
-            norm_l = np.linalg.norm(tangent_l)
-            norm_r = np.linalg.norm(tangent_r)
+            norm_l = gmi.R2_norm(tangent_l)
+            norm_r = gmi.R2_norm(tangent_r)
             data_l = data[edge_l[0]]
             data_0 = data[edge_l[1]]
             data_r = data[edge_r[1]]
@@ -195,7 +195,7 @@ class disk_interface:
             p0 = edge[0]
             p1 = edge[1]
             tangent = self.coords[p1] - self.coords[p0]
-            tangent = tangent/np.linalg.norm(tangent)
+            tangent = tangent/gmi.R2_norm(tangent)
 
             if drop_model:
                 tension = gamma
@@ -374,6 +374,7 @@ def visualize_intface(fig, ax, intface, show_velocity=False, show_tension=False,
         show_tension (boolean): whether to show arrows for tension
     """
     no_intf_edges = len(intface.edges)
+    intface.edge_tension = intface.calc_t_gamma()
     for ied in range(no_intf_edges):
         p1 = intface.coords[intface.edges[ied][0]][:]
         p2 = intface.coords[intface.edges[ied][1]][:]

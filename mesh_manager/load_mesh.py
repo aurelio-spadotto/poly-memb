@@ -2,6 +2,7 @@ import meshio
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.patches import Polygon as Polygon
+from . import geometric_info as gmi
 
 class mesh2D:
     """
@@ -13,6 +14,8 @@ class mesh2D:
 
     elem2node   (list(list(int))): element 2 node connectivity
     elem2edge  (list(list(int))): element 2 edge connectivity
+    no_edges (int): number of edges
+    edge2elem  (list(list(int))): edge 2 element connectivity
     coords (list(np.array)): node coordinates, 2 components
     side_mask (list): element mask to define phase (0 int, 1 ext)
     node_bnd_mask  (list(int)): node mask to define if on border and what border (0 if internal, k if on boundary k)
@@ -40,11 +43,12 @@ class mesh2D:
         self.intface_edges = []
 
         # generate elem2edge connectivity
-        self.elem2edge, no_edges = self.generate_elem2edge()
+        self.elem2edge, self.no_edges = self.generate_elem2edge()
+        self.edge2elem = []
 
         # attributes linked to boundary
         self.node_bnd_mask = [-1]*len(self.coords)
-        self.edge_bnd_mask = [-1]*no_edges
+        self.edge_bnd_mask = [-1]*self.no_edges
 
 
         # set boundary mask
@@ -94,10 +98,11 @@ class mesh2D:
         - self (self2D): self
 
         Returns:
-        - list of int: self to replace to self.elem2edge
+        - list : elem2edge connectivity
         """
         elem2edge = []
-        midpoint_list = [] # list of midpoints of explored edges (to check if one was already added)
+        edge_dict = {} # edge_dictionary: key is pair of nodes, value is index
+        max_edge_idx = 0
         intface_edges = []
         for iel in range(len(self.elem2node)):
             # initialize local list
@@ -105,41 +110,36 @@ class mesh2D:
             edge_per_elem = len(self.elem2node[iel])
             # loop over edge: if already there retrieve index, otherwise add
             for ie in range(edge_per_elem):
-                edge_ino1= self.elem2node[iel][ie]
-                edge_ino2= self.elem2node[iel][(ie+1)%edge_per_elem]
-                edge_midpoint = 0.5*(self.coords[edge_ino1]+self.coords[edge_ino2])
-                # search if edge is already there (loop over midpoint_list)
-                k = 0
-                found = False
-                while (k<len(midpoint_list) and not found):
-                    checked_midpoint = midpoint_list[k]
-                    if (np.linalg.norm(checked_midpoint-edge_midpoint)<1e-6):
-                        found = True
-                    if (not found):
-                        k = k +1
-                # if it was not found, add to midpoint_list
-                if (k==len(midpoint_list)):
-                    midpoint_list.append(edge_midpoint)
-                # insert edge in local list
-                edges.append(k)
+                ino1= self.elem2node[iel][ie]
+                ino2= self.elem2node[iel][(ie+1)%edge_per_elem]
+                edge = tuple(sorted((ino1, ino2)))
+                # search if edge is already there by searching the dicitionary
+                # if not there add it to dictionary
+                if (edge in edge_dict):
+                    edge_idx = edge_dict[edge]
+                else:
+                    edge_idx = max_edge_idx
+                    edge_dict[edge] = max_edge_idx
+                    max_edge_idx += 1
+                edges.append(edge_idx)
             elem2edge.append(edges)
 
-        return [elem2edge, len(midpoint_list)]
+        return [elem2edge, max_edge_idx]
 
 
     def generate_edge2elem(self):
         """
         Calculates edge 2 element connectivity
         """
-        no_edges = max([max(elem_edges) for elem_edges in self.elem2edge])
-        edge2elem = []
+        no_total_edges = self.no_edges
+        edge2elem = [[] for k in range(no_total_edges)]
 
-        for ie in range(no_edges):
-            elems = []
-            for iel in range (len(self.elem2node)):
-                if (any([k==ie for k in self.elem2edge[iel]])):
-                    elems.append(iel)
-            edge2elem.append(elems)
+        no_elems = len(self.elem2edge)
+        for iel in range(no_elems):
+            elem2edge = self.elem2edge[iel]
+            no_edges = len(elem2edge)
+            for ie in range(no_edges):
+                edge2elem[elem2edge[ie]].append(iel)
 
         return edge2elem
 
@@ -147,15 +147,22 @@ class mesh2D:
         """
         Generates elem2elem connectivity (elements sharing one edge standing on same side)
         """
-        elem2elem = []
-        for iel0, elem0 in enumerate(self.elem2node):
-            edges0 = self.elem2edge[iel0]
-            connected_elems = []
-            for iel1, elem1 in enumerate(self.elem2node):
-                edges1 = self.elem2edge[iel1]
-                if (len( set(edges0).intersection(edges1) )>0 and self.side_mask[iel0]+self.side_mask[iel1]!=1 and iel0!=iel1):
-                    connected_elems.append(iel1)
-            elem2elem.append(connected_elems)
+        no_elems = len(self.elem2node)
+        elem2elem = [[] for k in range(no_elems)]
+        edge2elem = self.edge2elem
+
+        if (self.edge2elem == []):
+            self.edge2elem = self.generate_edge2elem()
+        edge2elem = self.edge2elem
+        no_edges = len(edge2elem)
+
+        for ie in range(no_edges):
+            elements = edge2elem[ie]
+            if len(elements)==2: # otherwise it is a boundary edge
+                iel1, iel2 = elements
+                if (self.side_mask[iel1]+self.side_mask[iel2]!=1):
+                    elem2elem[iel1].append(iel2)
+                    elem2elem[iel2].append(iel1)
 
         return elem2elem
 
@@ -278,11 +285,11 @@ class mesh2D:
         no_edges = len(self.elem2edge[iel])
         p1 = self.coords[self.elem2node[iel][ ie]]
         p2 = self.coords[self.elem2node[iel][ (ie +1)%no_edges]]
-        hE = np.linalg.norm(p2-p1)
+        hE = gmi.R2_norm(p2-p1)
         if (hE==0):
             raise ValueError("Issue with element ", iel, "at edge ", ie,": Edge size cannot be 0")
 
-        return np.linalg.norm(p2-p1)
+        return gmi.R2_norm(p2-p1)
 
 
     def get_edge_normal(self, iel, num_face):
@@ -358,7 +365,7 @@ def move_critical_points(mesh, rho):
     # get mesh_size
     p1 = mesh.elem2node[0][0]
     p2 = mesh.elem2node[0][1]
-    h = np.linalg.norm(mesh.coords[p1]-mesh.coords[p2])
+    h = gmi.R2_norm(mesh.coords[p1]-mesh.coords[p2])
     # loop over points
     for ino in range(mesh.no_points):
         x = mesh.coords[ino][0]

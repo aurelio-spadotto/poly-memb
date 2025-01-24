@@ -2,7 +2,17 @@ from . import load_mesh
 import numpy as np
 from sympy import symbols, Eq, solve
 
+def R2_norm(x):
+    """
+    Calculates Euclidean norm in R2
 
+    Args:
+        x (np.ndarray): R2 vector whose to calculate norm of
+
+    Return:
+        float
+    """
+    return np.sqrt(x[0]**2 + x[1]**2)
 
 def is_proper(value):
     """
@@ -180,7 +190,7 @@ def is_cut(mesh,iel,rho):
     r_min = 1e6
     r_max = 0
     for ino in range(3):
-        r = np.linalg.norm(mesh.coords[mesh.elem2node[iel,ino]])
+        r = mema.R2_norm(mesh.coords[mesh.elem2node[iel,ino]])
         if (r<=r_min):
             r_min = r
         if (r>=r_max):

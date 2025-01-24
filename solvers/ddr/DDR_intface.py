@@ -38,8 +38,8 @@ def disc_grad (mesh, iel):
         # get normal by rotation
         normal1 = np.array([[0,1],[-1,0]])@tangent1
         normal2 = np.array([[0,1],[-1,0]])@tangent2
-        norm1 = normal1/np.linalg.norm(normal1)
-        norm2 = normal2/np.linalg.norm(normal2)
+        norm1 = normal1/mema.R2_norm(normal1)
+        norm2 = normal2/mema.R2_norm(normal2)
         mod_T = mesh.calc_surface(iel)
         GRAD[:,ino] = 0.5/mod_T*(normal1+normal2)
     return GRAD
@@ -64,17 +64,17 @@ def p1_rec_matrix (mesh,iel):
         mid2 = a + (b-a)*2/4
         mid3 = a + (b-a)*3/4
         if   (with_s and sign =='minus'):
-            return  np.linalg.norm(b-a)/90*(7*fun(a[0], a[1]) +
+            return  mema.R2_norm(b-a)/90*(7*fun(a[0], a[1]) +
                                             24*fun(mid1[0],mid1[1]) +
                                             6*fun(mid2[0],mid2[1]) +
                                             8*fun(mid3[0],mid3[1]))
         elif (with_s and sign =='plus'):
-            return  np.linalg.norm(b-a)/90*(8*fun(mid1[0],mid1[1]) +
+            return  mema.R2_norm(b-a)/90*(8*fun(mid1[0],mid1[1]) +
                                             6*fun(mid2[0],mid2[1]) +
                                            24*fun(mid3[0],mid3[1]) +
                                             7*fun(b[0], b[1]))
         else:
-            return  np.linalg.norm(b-a)/90*(7*fun(a[0], a[1]) +
+            return  mema.R2_norm(b-a)/90*(7*fun(a[0], a[1]) +
                                             32*fun(mid1[0],mid1[1]) +
                                             12*fun(mid2[0],mid2[1]) +
                                             32*fun(mid3[0],mid3[1]) +
@@ -125,7 +125,7 @@ def p1_rec_matrix (mesh,iel):
                   # get direction of edge
                   start = mesh.coords[elem[k]]
                   end   = mesh.coords[elem[(k+1)%node_per_elem]]
-                  tangent = (end-start)/np.linalg.norm(end-start)
+                  tangent = (end-start)/mema.R2_norm(end-start)
                   # get normal by rotation
                   normal = np.array([[0,1],[-1,0]])@tangent
                   M [i][j] = M [i][j] + simpson(start, end, lambda x,y: np.dot(normal,csi[i][j] (x,y)))
@@ -141,8 +141,8 @@ def p1_rec_matrix (mesh,iel):
                   # get normal by rotation
                   normal1 = np.array([[0,1],[-1,0]])@tangent1
                   normal2 = np.array([[0,1],[-1,0]])@tangent2
-                  norm1 = normal1/np.linalg.norm(normal1)
-                  norm2 = normal2/np.linalg.norm(normal2)
+                  norm1 = normal1/mema.R2_norm(normal1)
+                  norm2 = normal2/mema.R2_norm(normal2)
                   B2 [i][j] = B2 [i][j] + simpson(start1, end1,
                                                 lambda x,y: np.dot(norm1,psi[i](x,y)), True, 'minus')#dx
                   B2 [i][j] = B2 [i][j] + simpson(start2, end2,
@@ -153,7 +153,7 @@ def p1_rec_matrix (mesh,iel):
                   for k in range(node_per_elem):
                       start = mesh.coords[elem[k]]
                       end = mesh.coords[elem[(k+1)%node_per_elem]]
-                      tangent = (end-start)/np.linalg.norm(end-start)
+                      tangent = (end-start)/mema.R2_norm(end-start)
                       # get normal by rotation
                       normal = np.array([[0,1],[-1,0]])@tangent
                       # get surface of face
@@ -448,7 +448,7 @@ def assemble_N_gamma(mesh, sigma_in, sigma_ex):
 
                     tangent = mesh.coords[mesh.elem2node[iel_in] [(first_ie_in+ied + 1)%node_per_elem_in]] \
                              -mesh.coords[mesh.elem2node[iel_in] [(first_ie_in+ied)%node_per_elem_in]]
-                    mod_E = np.linalg.norm(tangent)
+                    mod_E = mema.R2_norm(tangent)
 
                     # add contribution
                     N_gamma[dof1,dof2] += alpha*sign1*sign2*calc_r2_prod_integ(v1A,v1B,v2A,v2B)
@@ -525,7 +525,7 @@ def assemble_b_J(mesh, J_datum, sigma_in, sigma_ex):
 
                 tangent = mesh.coords[mesh.elem2node[iel_in] [(first_ie_in+ied+1)%node_per_elem_in]] \
                          -mesh.coords[mesh.elem2node[iel_in] [(first_ie_in+ied)%node_per_elem_in]]
-                mod_E = np.linalg.norm(tangent)
+                mod_E = mema.R2_norm(tangent)
 
                 # add contribution
                 B_J_gamma[dof] += alpha*sign*calc_r2_prod_integ(v1A,v1B,v2A,v2B)
@@ -628,7 +628,7 @@ def calc_L2_error (mesh, u, ref_sol):
             e = mesh.coords[mesh.elem2node[iel] [(ino+1)%node_per_elem]] \
               - mesh.coords[mesh.elem2node[iel] [ino]]
 
-            square_norm += 0.5*np.linalg.norm(e)**2*calc_r2_prod_integ(uA,uB,uA,uB)
+            square_norm += 0.5*mema.R2_norm(e)**2*calc_r2_prod_integ(uA,uB,uA,uB)
 
     return np.sqrt(square_norm)
 
@@ -723,7 +723,7 @@ def pretty_visualize_gradient(mesh, u, fig, ax, cmap = 'magma', random_threshold
         # get gradient and trace arrow in barycenter
         G = disc_grad(mesh, iel)
         gradient = np.dot(G, nodal_values)
-        norm_gr = np.linalg.norm(gradient)
+        norm_gr = mema.R2_norm(gradient)
         min_norm_gr = min (norm_gr, min_norm_gr)
         max_norm_gr = max (norm_gr, max_norm_gr)
 
@@ -743,7 +743,7 @@ def pretty_visualize_gradient(mesh, u, fig, ax, cmap = 'magma', random_threshold
         bary = mesh.barycenter (iel)
         G = disc_grad(mesh, iel)
         gradient = np.dot(G, nodal_values)
-        norm_gr = np.linalg.norm(gradient)
+        norm_gr = mema.R2_norm(gradient)
         color = colmap((norm_gr-min_norm_gr)/(max_norm_gr-min_norm_gr))
         element = Polygon(verts, closed=True,\
                           facecolor=color, alpha=0.8)
@@ -837,8 +837,8 @@ def calc_t_maxwell (mesh, intface, u, eps_in, eps_ext):
         E_ext = np.dot(GR_ext, nodal_values_ext)
 
         # get maxwell tensor
-        mw_tensor_in = eps_in*(np.tensordot(E_in, E_in, axes = 0)  -0.5*np.linalg.norm(E_in)*np.eye(2))
-        mw_tensor_ext = eps_ext*(np.tensordot(E_ext, E_ext, axes = 0)  -0.5*np.linalg.norm(E_ext)*np.eye(2))
+        mw_tensor_in = eps_in*(np.tensordot(E_in, E_in, axes = 0)  -0.5*mema.R2_norm(E_in)*np.eye(2))
+        mw_tensor_ext = eps_ext*(np.tensordot(E_ext, E_ext, axes = 0)  -0.5*mema.R2_norm(E_ext)*np.eye(2))
 
         for ie in range(no_edges):
             intface_edge = mesh.cuts[icut][2][ie]
