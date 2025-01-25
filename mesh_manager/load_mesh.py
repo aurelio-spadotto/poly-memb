@@ -58,6 +58,28 @@ class mesh2D:
         if (bnd_dof_type=="edge"):
             self.mark_bnd_edges()
 
+        # Pre-calculate metrics
+        self.edge_normal = []
+        self.edge_xE = [np.array([0., 0.]) for k in range(self.no_edges)]
+        self.edge_length = [0 for k in range(self.no_edges)]
+        self.element_surface = []
+        self.element_barycenter = []
+
+        self.no_elems = len(self.elem2node)
+
+        for iel in range(self.no_elems):
+            self.element_surface.append(self.calc_surface(iel))
+            self.element_barycenter.append(self.barycenter(iel))
+            no_edge = len(self.elem2edge[iel])
+            element_edge_normal = []
+            for ie in range(no_edge):
+                glob_ie = self.elem2edge[iel][ie]
+                self.edge_length[glob_ie] = self.get_edge_length(iel, ie)
+                self.edge_xE[glob_ie] = self.get_xE(iel,ie)
+                element_edge_normal.append(self.get_edge_normal(iel, ie))
+            self.edge_normal.append(element_edge_normal)
+
+
 
     def generate_intface_edges(self):
         """
