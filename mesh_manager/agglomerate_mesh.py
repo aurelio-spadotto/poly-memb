@@ -270,8 +270,9 @@ def agglomerate (mesh, ref_mesh, cryt_size, cryt_skewness, verbose=False):
         print ("Updated mesh.cuts")
 
 
-    # Suppress agglomerated elements
-    elem2node, cuts = suppress_elements (elem2node, cuts, agglomerated)
+    # Suppress agglomerated elements (if any)
+    if (len(agglomerated)>0):
+        elem2node, cuts = suppress_elements (elem2node, cuts, agglomerated)
 
     if verbose:
         print ("Suppressed agglomerated elements")
