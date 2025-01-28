@@ -424,6 +424,7 @@ def display_element (mesh, elem, ax, color, width = 1e-4, display_nodes= True):
         #ax.arrow(xE[0], xE[1], nTE[0], nTE[1], width = 1)
 
 def visualize_mesh(mesh, ax, display_no_nodes = False,\
+                             display_elem_id = False,
                              display_side = True,\
                              display_couples = False,\
                              cmap='magma', \
@@ -463,13 +464,22 @@ def visualize_mesh(mesh, ax, display_no_nodes = False,\
             # write no of vertices
             bary = mesh.barycenter(iel)
             text_pos = bary
-            text= str(iel)+", "+str(node_per_elem)
+            text= str(node_per_elem)
             ax.text(text_pos[0], text_pos[1], text, fontsize=13, color='black', clip_on=True)
+
 
         elif (display_side):
             element = Polygon(verts, closed=True, edgecolor='black',\
                               facecolor=colors[int(mesh.side_mask[iel])], alpha=0.2)
             ax.add_patch(element)
+
+        if (display_elem_id):
+            # write index of elem
+            bary = mesh.barycenter(iel)
+            text_pos = bary
+            text= str(iel)
+            ax.text(text_pos[0], text_pos[1], text, fontsize=13, color='black', clip_on=True)
+
 
         if (show_barycenter):
             xT = mesh.barycenter(iel)
