@@ -174,10 +174,10 @@ def agglomerate (mesh, ref_mesh, cryt_size, cryt_skewness, verbose=False):
                     # Get involved elements:
                     # either they are original elements of the mesh,
                     # or thy are the result of some previous agglomeration
-                    # to check this use ***_previoulsy_agglom
+                    # to check this use ***_previoulsy_agglom
                     # (get agglomerating and to_agglomerate as lists of nodes)
 
-                    if verbose: print ("Agglomeration: ")
+                    if verbose: print ("Agglomeration: ", agglomerations[iag])
 
                     agglomerating_elem_idx  = agglomerating_previously_agglom [iag]
                     if (agglomerating_elem_idx == -1):
@@ -206,7 +206,7 @@ def agglomerate (mesh, ref_mesh, cryt_size, cryt_skewness, verbose=False):
 
                     agglomerate_elem, intface_data_agglomerate = \
                          agglomerate_2_elems (agglomerating_elem, to_agglomerate_elem,\
-                                              intface_data_agglomerating, intface_data_to_agglomerate)
+                                              intface_data_agglomerating, intface_data_to_agglomerate, verbose=verbose)
 
                     if verbose: print ("agglomerate element: ", agglomerate_elem)
                     if verbose: print ("agglomerate_intface data: ", intface_data_agglomerate)
@@ -233,16 +233,23 @@ def agglomerate (mesh, ref_mesh, cryt_size, cryt_skewness, verbose=False):
     if verbose:
         print ("Agglomerations done")
 
-        print ("Remaining elements: ")
-        print (remaining_elems)
+
 
     # Correct eleme2node and cuts using final_agglomerating
     for k in range(len(remaining_elems)):
         iel = remaining_elems[k]
-        # index of agglomerating element in agglomerations
-        iag = [l for l in range(no_agglom) if agglomerations[l][0]==iel][-1] # the last (if multiple times agglomerating)
+        # index of agglomerate element in agglomerations
+        # the agglomerate element is the biggest among the
+        # agglomerate elements originating by iel as agglomerating element
+        agglomerate_elem_list = [l for l in range(no_agglom) if agglomerations[l][0]==iel]
+        sizes_agglomerate = [len(agglomerate_elems[k]) for k in agglomerate_elem_list]
+        size_final_agglomerate = max(sizes_agglomerate)
+        iag = [idx for idx in agglomerate_elem_list if len(agglomerate_elems[idx])==size_final_agglomerate][0]
         agglomerate_elem = agglomerate_elems[iag]
         elem2node[iel] = agglomerate_elem
+        if verbose:
+            print ("Remaining elements: ", iel,"-->", agglomerate_elem)
+
 
     if verbose:
         print ("In elem2node replaced agglomerating elements with agglomerate elements")
@@ -300,8 +307,7 @@ def agglomerate_2_elems (elem_agglomerating, elem_to_agglomerate,\
                          intface_data_agglomerating, intface_data_to_agglomerate, verbose=False):
     """
     Agglomerate 2 elements provided as lists of points
-    ALERT: currently, agglomerations are done under the hypothesis that
-    the elements share only 1 edge (may not always be the case)
+    ALERT: currently, agglomerations are done under hp that elements share a connected chain of points
 
     Args:
     elem_agglomerating (list(int)): agglomerating element as list of points
@@ -321,6 +327,7 @@ def agglomerate_2_elems (elem_agglomerating, elem_to_agglomerate,\
             if (point0 == point1):
                 common_points.append([ino0, ino1])
 
+
     if verbose:
         print ("common_points: ", common_points)
         print ("intface_data_agglomerating: ",  intface_data_agglomerating)
@@ -329,22 +336,87 @@ def agglomerate_2_elems (elem_agglomerating, elem_to_agglomerate,\
     # Compose list of points of agglomerate element
     agglomerate_elem = []
 
-    #select starting point
-    if ((common_points[0][0] + 1)%len(elem_agglomerating)==common_points[1][0]):
-        first_common_0 = common_points[0][0]
-        first_common_1 = common_points[0][1]
-    else:
-        first_common_0 = common_points[1][0]
-        first_common_1 = common_points[1][1]
+# >>>>>>>>
+    # Get local indexes of endpoints, points at extrema of chain of common points
+    # Get the first of the chain, which is not necessarily the first of common_point list;
+    # to check, verify if consecutive point is also a common point
+    # take it as first if it is not the case, and take the following as second
+
+    ino = 0
+    found = False
+    while (ino<len(common_points) and not found):
+        if (not((common_points[ino][0] +1)%len(elem_agglomerating) in [common_points[k][0] for k in range(len(common_points))])):
+            endpoints_agglomerating =  [common_points[(ino+1)%len(common_points)][0], common_points[ino][0]]
+            endpoints_to_agglomerate  =[common_points[(ino+1)%len(common_points)][1], common_points[ino][1]]
+            found = True
+        ino +=1
 
 
-    for ino0 in range(len(elem_agglomerating)):
-        if (ino0 == first_common_0):
-            for k1 in range(len(elem_to_agglomerate) - 1):
-                ino1 = (k1 + first_common_1)%len(elem_to_agglomerate)
-                agglomerate_elem.append(elem_to_agglomerate[ino1])
-        else:
-            agglomerate_elem.append(elem_agglomerating[ino0])
+    if verbose:
+        print ("endpoints")
+        print (endpoints_agglomerating, endpoints_to_agglomerate)
+
+    # start a loop from initial point of agglomerating elem,
+    # if the treated point is the first of the chain of common points
+    # add it and start looping forward over the points of the agglomerated elem (consider point are always ordered co-clock-wise).
+    # End the internal loop over points of agglomerated when second endpoint is found
+
+#    ino_agglomerating = 0
+#    maxit_ex = 0 # in case of bug and infinite loop
+#    maxit_in = 0
+#    while (ino_agglomerating < len(elem_agglomerating) and maxit_ex<20):
+#        agglomerate_elem.append(elem_agglomerating[ino_agglomerating])
+#        if (ino_agglomerating==endpoints_agglomerating[0]):
+#            ino_to_agglomerate = (endpoints_to_agglomerate[0] +1)%len(elem_to_agglomerate)
+#            while (ino_to_agglomerate != endpoints_to_agglomerate[1] and maxit_in <20):
+#                agglomerate_elem.append(elem_to_agglomerate[ino_to_agglomerate])
+#                ino_to_agglomerate = (ino_to_agglomerate +1)%len(elem_to_agglomerate)
+#                maxit_in +=1
+#            # restart from second endpoint on elem_agglomerating
+#            ino_agglomerating = endpoints_agglomerating[1] -1
+#        ino_agglomerating += 1
+#        maxit_ex +=1
+
+    maxit_ex = 0 # in case of bug and infinite loop
+    maxit_in = 0
+
+    starting_ino_agglomerating = endpoints_agglomerating[0]
+    ino_agglomerating = starting_ino_agglomerating
+    while ((ino_agglomerating != starting_ino_agglomerating and maxit_ex<20) or maxit_ex==0):
+        agglomerate_elem.append(elem_agglomerating[ino_agglomerating])
+
+        if (ino_agglomerating==endpoints_agglomerating[0]):
+            ino_to_agglomerate = (endpoints_to_agglomerate[0] +1)%len(elem_to_agglomerate)
+            while (ino_to_agglomerate != endpoints_to_agglomerate[1] and maxit_in <20):
+                agglomerate_elem.append(elem_to_agglomerate[ino_to_agglomerate])
+                ino_to_agglomerate = (ino_to_agglomerate +1)%len(elem_to_agglomerate)
+                maxit_in +=1
+            # restart from second endpoint on elem_agglomerating
+            ino_agglomerating = (endpoints_agglomerating[1] -1)%len(elem_agglomerating)
+
+        ino_agglomerating = (ino_agglomerating +1)%len(elem_agglomerating)
+        maxit_ex +=1
+
+
+# =========
+#    Old implementation
+#    #select starting point
+#    if ((common_points[0][0] + 1)%len(elem_agglomerating)==common_points[1][0]):
+#        first_common_0 = common_points[0][0]
+#        first_common_1 = common_points[0][1]
+#    else:
+#        first_common_0 = common_points[1][0]
+#        first_common_1 = common_points[1][1]
+#
+#
+#    for ino0 in range(len(elem_agglomerating)):
+#        if (ino0 == first_common_0):
+#            for k1 in range(len(elem_to_agglomerate) - 1):
+#                ino1 = (k1 + first_common_1)%len(elem_to_agglomerate)
+#                agglomerate_elem.append(elem_to_agglomerate[ino1])
+#        else:
+#            agglomerate_elem.append(elem_agglomerating[ino0])
+#<<<<<<<
 
     # Adjust first_ie in intface data of elem to agglomerate
 
@@ -395,14 +467,15 @@ def get_final_agglomerating (agglomerations, iag, verbose=False):
         agglomerations (list(list(int))): list of agglomerations to perform
         iag (int): index in list of agglomerations
     """
-    if verbose: print (agglomerations[iag])
+    if verbose: print (agglomerations[iag][1],"-->")
     to_agglomerate_elements = [agglomerations [k][1] for k in range(len(agglomerations))]
     agglomerating = agglomerations[iag][0]
     if (agglomerating in to_agglomerate_elements):
         # get index of agglomerating as agglomerted idx
         idx = [k for k in range(len(agglomerations)) if agglomerations[k][1]==agglomerating][0]
-        return get_final_agglomerating (agglomerations, idx)
+        return get_final_agglomerating (agglomerations, idx, verbose)
     else:
+        if (verbose): print (agglomerating)
         return agglomerating
 
 def suppress_elements (elem2node, cuts, list_of_elems):
@@ -432,26 +505,4 @@ def suppress_elements (elem2node, cuts, list_of_elems):
             new_cuts[icut][0][pos] -= suppressed_elems_before
 
     return new_elem2node, new_cuts
-
-#def display_element (mesh, elem, ax, color='black', display_nodes= True):
-#    """
-#    Display single element
-#    Args:
-#        mesh (mesh2D): mesh
-#        elem (list(int)): element (list of points)
-#        ax: axes
-#        color: color of edges
-#        display_nodes: show indexes of nodes (both local and global)
-#    """
-#    ax.set_aspect('equal')
-#    no_nodes = len(elem)
-#    for ino in range(no_nodes):
-#        p1 = mesh.coords[elem[ino]]
-#        p2 = mesh.coords[elem[(ino+1)%no_nodes]]
-#        xE = 0.5*(p1 + p2)
-#        if (display_nodes):
-#            ax.text(p1[0], p1 [1], str(elem[ino])+","+str(ino), fontsize = 20, color=color)
-#        #nTE = mesh.get_edge_normal(iel, ie)
-#        ax.arrow(p1[0], p1[1], -p1[0] + p2[0], -p1[1] + p2[1], width = 1e-4, color = color)
-
 
