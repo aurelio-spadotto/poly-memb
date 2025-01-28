@@ -361,7 +361,7 @@ def calc_time_step (intface, eta):
     else:
         return 1e6 # when taking min with tau_default this is not taken
 
-def visualize_intface(fig, ax, intface, show_velocity=False, show_tension=False,\
+def visualize_intface(fig, ax, intface, color = 'red', show_velocity=False, show_tension=False,\
                       show_nodes = False, mark_first_node = False, show_edge_idx = False):
     """
     Plots interface
@@ -383,7 +383,7 @@ def visualize_intface(fig, ax, intface, show_velocity=False, show_tension=False,
         xx = [p1[0],p2[0]]
         yy = [p1[1],p2[1]]
         v = intface.velocity[ied]
-        ax.plot(xx,yy,'r', markersize = 4, linewidth=3)
+        ax.plot(xx,yy, color, markersize = 4, linewidth=2)
         if (show_velocity):
             ax.arrow(p1[0],p1[1], v[0],v[1],head_width=0.005)
         if (show_tension):
