@@ -2,6 +2,7 @@ from . import load_mesh as lm
 from . import geometric_info as gmi
 from . import dof_tools as dt
 import numpy as np
+from scipy.optimize import minimize
 import copy
 import warnings
 
@@ -253,7 +254,10 @@ class disk_interface:
         for ino in range(len(self.coords)):
             new_coords.append(self.coords[ino] + delta_t*vel_at_nodes[ino])
 
-        return disk_interface(self.edges, new_coords, self.k_b, self.k_str, initial=False,\
+        # adjust node position to conserve volume
+        ref_vol = shoelace_volume(self.coords)
+        coords_adjust = volume_conservation_postproc (new_coords, ref_vol)
+        return disk_interface(self.edges, coords_adjust, self.k_b, self.k_str, initial=False,\
                               init_edge_length=self.init_edge_length, velocity = self.velocity)
 
 
@@ -316,6 +320,95 @@ def calc_membrane_volume (intface):
         x0_plus =  x0[(k+1)%len(x0)]
         integ += 0.5*np.dot( normal[k], 0.5*(x0_min + x0_plus))
     return integ
+
+def shoelace_volume (coords):
+    """
+    Calculates volume of intface with shoelace formula
+    (given its coords)
+    Args:
+        coords list(np.array): formatted as intface.coords
+    """
+    vol = 0.0
+    for edge in range(len(coords)):
+        p0   = coords[edge]
+        p1   = coords[(edge+1)%len(coords)]
+        vol += 0.5*(p0[0]*p1[1] - p1[0]*p0[1])
+    return vol
+
+def volume_conservation_postproc (vert_pos, ref_vol):
+    """
+    Adjust the position of vertices to restore initial volume
+    of the surface. Displacement with respect to position of the
+    surface after advection minimal. Solve the minimization problem:
+
+    min_{x} (x-vert_pos)**2 with constraint: volume (vert_pos)= ref_vol
+
+    For minimization, use Sequential Quadratic Programming (SQP),
+    implemented in library scipy.optimize
+
+    Args:
+        vert_pos (list(np.array)): vertices formatted as field intface.coords
+        ref_vol (float): reference volume
+    Return:
+        list(np.array): optimized vertices position
+    """
+    def flatten_coords(x0):
+        """
+        Auxiliary function to flatten vertices coordinates in correct format for scipy.optimize.minimize
+
+        Args:
+            x0(list(np.array))
+        Returns:
+            np.array
+        """
+        flattened_x0 = np.zeros(2*len(x0))
+        for k in range(len(x0)):
+            flattened_x0[2*k] = x0[k][0]
+            flattened_x0[2*k+1] = x0[k][1]
+
+        return flattened_x0
+
+    def coord_list(flattened_x0):
+        """
+        Reshape vertex coordinates as in intface.coords
+
+        Args:
+            flattened_x0 (np.array)
+        Returns:
+            x0(list(np.array))
+        """
+        x0 = []
+        N = int(flattened_x0.shape[0]/2)
+        for k in range(N):
+            x0.append(np.array([flattened_x0[2*k], flattened_x0[2*k+1]]))
+        return x0
+
+    def objective(flat_x, flat_x_star):
+        """
+        Objective function penalizing distance w.r.t. advected vertex position
+        """
+        return sum((flat_x-flat_x_star)**2)
+
+    def flat_volume(flat_x0):
+        """
+        Volume calculated with flattened input
+        Args:
+            flat_x0 (np.array)
+        """
+        return shoelace_volume(coord_list(flat_x0))
+
+    def volume_constraint(flat_x0, ref_vol):
+        return flat_volume(flat_x0) - ref_vol
+
+
+    flat_vert_pos = flatten_coords(vert_pos)
+    obj = lambda flat_x: objective(flat_x, flat_vert_pos) # only one argument
+    constraints = {'type': 'eq', 'fun': lambda flat_x: volume_constraint(flat_x, ref_vol)}
+    argmin = minimize(obj, flat_vert_pos, constraints=constraints, method='SLSQP', options={'disp': True})
+
+    return coord_list(argmin.x) # nb: argmin is an OptimizeResult object
+
+
 
 def calc_membrane_energy (intface):
     """
