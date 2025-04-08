@@ -27,6 +27,7 @@ def break_mesh(mesh, intface, execute_fill_side_mask = True, verbose = False): #
     # elements thane are identified by an idx which cannot change
     # (elimination of destroyed elements happens only at the end)
     coords = copy.deepcopy(mesh.coords)
+    no_initial_points = len(coords)
     elem2node = copy.deepcopy(mesh.elem2node)
     # a mask to keep track of cut elements (to be taken out at the end)
     # (0 if uncut, 1 if cut)
@@ -46,7 +47,7 @@ def break_mesh(mesh, intface, execute_fill_side_mask = True, verbose = False): #
 
     # find first edge of intface intersecting an element (coming in)
     if (verbose):
-        print (">>in find_first_intersecting_edge")
+        print (">> in find_first_intersecting_edge")
     [ied_initial, iel_to_cut, initial_enter_point] = find_first_intersecting_edge(mesh, intface)
 
     # STEP 1
@@ -65,9 +66,11 @@ def break_mesh(mesh, intface, execute_fill_side_mask = True, verbose = False): #
         elem_to_cut = elem2node[iel_to_cut]
         # cut element
         if (verbose):
+            print ("")
             print (">>> in cut elem")
         [coords, new_points, intface_edge_indexes, child_elem_in, child_elem_ex, ied_exit] \
-            = cut_elem (coords, elem_to_cut, intface, ied_enter, verbose=verbose)
+            = cut_elem (coords, elem_to_cut, intface, ied_enter,\
+                        initial_enter_point, idx_initial_enter_point = no_initial_points, verbose=verbose)
         # get exit point
         exit_point = coords[new_points[-1]]
         # append cut data
@@ -77,8 +80,8 @@ def break_mesh(mesh, intface, execute_fill_side_mask = True, verbose = False): #
         elem2node.append(child_elem_in)
         elem2node.append(child_elem_ex)
         #gamma_couples.append([len(elem2node)-2, len(elem2node)-1])
-        cut_elems = cut_elems + [0, 0]
-        cut_elems[iel_to_cut] = 1
+        cut_elems = cut_elems + [0, 0]  # generated elements are not cut
+        cut_elems[iel_to_cut] = 1       # element being cut is marked
 
         # Compose and append cut data_structure
         # by construction first_ie is [0, 0], but it may change when doing agglomeration
@@ -94,7 +97,7 @@ def break_mesh(mesh, intface, execute_fill_side_mask = True, verbose = False): #
         iel_to_cut = find_next_element(elem2node, coords, cut_elems, intface, ied_enter, iel_to_cut, intsec_points)
 
         if (verbose):
-            print (">>>ied_exit = ", ied_exit,"; iel_to_cut = ", iel_to_cut)
+            print (">>> ied_exit = ", ied_exit,"; iel_to_cut = ", iel_to_cut)
 
     # STEP 2
     # generate a refreshed cuts;
@@ -277,7 +280,8 @@ def adjacent_elements(elem2node, cut_iel, intsec_points):
 
     return elements
 
-def cut_elem (coords, elem, intface, ied, verbose):
+def cut_elem (coords, elem, intface, ied, initial_enter_point,\
+              idx_initial_enter_point,verbose):
     """
     Function to cut an element, and enrich a list of mesh points
 
@@ -286,6 +290,8 @@ def cut_elem (coords, elem, intface, ied, verbose):
         elem (list(int)): list of node idxs of the element
         intface (disk_interface): interface
         ied (int): entering intface edge
+        initial_enter_point (np.array): coords of initial point of break mesh
+        idx_initial_enter_points (int): its index
 
     Returns:
         list (np.array): enriched list points
@@ -297,21 +303,40 @@ def cut_elem (coords, elem, intface, ied, verbose):
 
     # initialize list of edges of the cut
     # and list of nodes f the cut
-    intface_edge_indexes = []
-    points_on_cut = []
+    intface_edge_indexes = [] # one elemnt for each edge on the cut
+                              # there is no 1to1 corresp. of intface edges and
+                              # edges of the cut elems: consider edges that intersect
+    points_on_cut = []        # list of points on the cut (coordinates):
+                              # the first is already there (check if it is the case also for first cut element)
+                              # the last is already there only if it is the first point added by
+                              # the cut algorithm (initial_eneter_point)
 
-    #determine intersection(s)
-    polygon = [coords[k] for k in elem]
+    new_coords = copy.deepcopy(coords) # udated list of coords to return
+
+    # 3 STEPS:
+
+    # STEP 1: get coordinates of points along cut
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    # first determine intersection(s) of piercing edge with element
+    # if edge is long: it gets in, it gets out: 2 intersection
+    # otherwise: a chain of edges make up the cut
+
+    # old line maybe useless: polygon = [coords[k] for k in elem]
+
     if (verbose):
         print (">>>> in get_intersection")
-    [intersections, cut_elem_edges] = get_intersections(coords, elem, intface, ied)
+    [intersections, cut_elem_edges] = get_intersections(new_coords, elem, intface, ied) # returns intsec coords and
+                                                                                    # idx of elemnt edge that is cut
+
+    no_intsecs = len(intersections) # no of intersections
 
     # compose cut, and get edges that are cut on the original element
     # consider 2 cases: 2 intsecs ---> ied_enter=ied_exit and cut is only one edge
     #                   1 intsec  ---> cut is a chain of edges
     if (verbose):
         print (">>>> in section to determine chain of new points")
-    if (len(intersections)==2):
+    if (no_intsecs==2):
         # points on cut are the only two intersections
         # ied_enter = ied_exit
         points_on_cut = intersections
@@ -320,13 +345,15 @@ def cut_elem (coords, elem, intface, ied, verbose):
         ied_exit = ied
     else:
         # fill the chain (loop)
-        cut_edges = []
+        cut_edges = [] # edges of the element to cut
         points_on_cut.append(intersections[0])
         cut_edges.append(cut_elem_edges[0])
         intface_edge_indexes.append(ied)
 
         done = False
-        current_ied = (ied + 1)%len(intface.edges)
+        current_ied = (ied + 1)%len(intface.edges) # the loop starts from the next edge:
+                                                   # either it is inisde the elem or it goes out
+                                                   # in which case end the loop
 
         if (verbose):
              print (">>>> in loop to fill a chain")
@@ -340,7 +367,7 @@ def cut_elem (coords, elem, intface, ied, verbose):
 
             # check if current edge intersects
             [intersections,cut_elem_edges] = \
-                 get_intersections(coords, elem, intface, current_ied)
+                 get_intersections(new_coords, elem, intface, current_ied)
             if (len(intersections)>0):
                 # add second intersection, cut edge, assign ied_exit and finish
                 cut_edges.append(cut_elem_edges[0])
@@ -352,11 +379,48 @@ def cut_elem (coords, elem, intface, ied, verbose):
             current_ied = (current_ied + 1)%len(intface.edges)
 
     if (verbose):
-        print (">>>> in check_and_add_new_points")
-    # add new points to list of points of output mesh and get their global indexes
-    [new_coords, indexes] = check_and_add_new_points (coords, points_on_cut)
+        print (">>>> in section to add new points to list of all points")
 
-    # compose children
+    # STEP 2: add new points to list of points of output mesh and get their global indexes
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    indexes = [] # indexes of new point in the expanded node list
+
+    # you have to retrieve the index of the first (the first intersection) that
+    # is supposed to be already there if it is not the first cut element
+    # the last is already there only if it is the last cut
+    if ((gmi.R2_norm(points_on_cut[0]-new_coords[-1])>1e-10)):
+        # point is not there: this is the first element cut
+        if (verbose):
+            print ("This is the first element cut: first intersection still has to be added")
+        new_coords.append(points_on_cut[0]) # point is new, increase coord list
+    # in both cases now it is the last point of the expanded new_coords
+    index_first_point = len(new_coords) - 1      # and get its index
+    # add index of first point to list of indexes of points on cut
+    indexes.append(index_first_point)
+
+    # if there are internal points add them (without checking if already there because it cannot be)
+    if (no_intsecs<2):
+        [new_coords, new_points] = no_check_and_add_new_points (new_coords, points_on_cut[1:-1]) # between first and last
+        indexes += new_points
+
+    # Check if last point is initial_enter_point,
+    # if not, just add it, otherwise, retrieve its index and signal that
+    # it is the last cut
+    if (gmi.R2_norm(points_on_cut[-1]- initial_enter_point) <1e-10):
+        if (verbose):
+            print ("This is the last element cut")
+        index_last_point = idx_initial_enter_point # only retrieve index
+    else:
+        new_coords.append(points_on_cut[-1])
+        index_last_point = len(new_coords) - 1
+    # add index (retrieved or added) to list of indexes of of points on cut
+    indexes.append(index_last_point)
+
+
+    # STEP 3: compose children elements
+    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     # first child is the internal one, second the external
     # by convention, element nodes are listed counter-clockwise
     # and first nodes are on the interface
@@ -464,6 +528,22 @@ def check_and_add_new_points (new_coords, new_points):
             new_coords.append(new_point)
             indexes.append(len(new_coords)-1)
     return [new_coords, indexes]
+
+def no_check_and_add_new_points (new_coords, new_points):
+    """
+    Add a bunch of new points without checking if point is already there,
+    and provide indexes on the new entries
+
+    Args:
+        new_coords (list(np.array)): list of points
+        new_points (list(np.arra)): points to add
+    """
+    indexes = []
+    for new_point in new_points:
+        new_coords.append(new_point)
+        indexes.append(len(new_coords)-1)
+    return [new_coords, indexes]
+
 
 ########################################################################################
 # FUNCTIONS I'M LOOKING TO REPLACE

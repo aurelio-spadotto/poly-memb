@@ -598,16 +598,17 @@ def assemble_B (mesh):
 
 def assemble_JP (mesh, v_rec, verbose = False):
     """
-    Assembles the Jump Penalisation term,
+    Assembles the Jump Penalization term,
     necessary to recover stability at lowest order (k=0)
     See di2020hybrid, sec. 7.6
 
     Args:
        mesh (mesh2D): mesh
-       v_rec (list): list of velocity reconstrunction format [A,b]
+       v_rec (list): list of velocity reconstruction format [A,b]
+       verbose (bool): verbosity flag
 
     Returns:
-       np.array: JP (jump penalisation matrix)
+       np.array: JP (jump penalization matrix)
     """
 #    def quadrature_order_3 (f, x0, x1):
 #        """
