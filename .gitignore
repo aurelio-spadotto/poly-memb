@@ -1,0 +1,5 @@
+docs/build
+solvers/__pycache__/
+solvers/hho/__pycache__/
+solvers/ddr/__pycache__/
+mesh_manager/__pycache__/

@@ -235,13 +235,14 @@ class disk_interface:
         return transferred_data
 
 
-    def advect(self, delta_t):
+    def advect(self, ref_vol, delta_t):
         """
         Advect interface using velocity
 
         Args:
+            ref_vol (float): reference volume 
             delta_t (float): time step
-
+           
         Returns:
             disk_intface: moved interface
         """
@@ -254,8 +255,6 @@ class disk_interface:
         for ino in range(len(self.coords)):
             new_coords.append(self.coords[ino] + delta_t*vel_at_nodes[ino])
 
-        # adjust node position to conserve volume
-        ref_vol = shoelace_volume(self.coords)
         coords_adjust = volume_conservation_postproc (new_coords, ref_vol)
         return disk_interface(self.edges, coords_adjust, self.k_b, self.k_str, initial=False,\
                               init_edge_length=self.init_edge_length, velocity = self.velocity)
