@@ -96,6 +96,28 @@ def dof_loc2glob (mesh, iel, loc_dof):
                 return 3*no_elems + 2*edge_glob_idx
             else:
                 return 3*no_elems + 2*edge_glob_idx + 1
+            
+def compute_dof_table (mesh):
+    """
+    Pre-compute the map loc2glob
+    Args:
+         mesh (mesh2D): mesh
+    Returns:
+         dof_table (list): list of local to global dof mapping for each element 
+    """
+    no_elems = len(mesh.elem2node)
+    dof_table = [] 
+    for iel in range(no_elems):
+        element_dofs = []
+        no_local_dofs = 1+2*(1+len(mesh.elem2node[iel])) # number of DOFs in element
+        for dof in range(no_local_dofs): # loop over x,y
+            element_dofs.append(dof_loc2glob(mesh, iel, dof))
+        
+        dof_table.append(element_dofs)
+    
+    return dof_table
+
+
 
 def get_edge_dofs(mesh, iel, ie):
     """
@@ -283,6 +305,47 @@ def get_v_rec_from_localV(mesh, iel, localV):
 
     return [A, b]
 
+def get_v_rec_from_localV_fast(mesh, iel, localV):
+    """
+    Made faster by removing numpy functions.
+
+    Args:
+        mesh                   (Mesh2D): mesh
+        iel                         (int): element index
+        localV   list(list): local function (v_T, {v_E}_E)
+
+    Returns:
+        tuple: [A11, A12, A21, A22, B1, B2]
+    """
+    # Average coincides with vT
+    b = localV[0]
+    b1, b2 = b[0], b[1]
+
+    # Initialize grad{ r^{k+1}_T}
+    A11, A12, A21, A22 = 0.0, 0.0, 0.0, 0.0
+
+    # Loop over edges
+    no_edges = len(mesh.elem2edge[iel])
+    mod_T = mesh.element_surface[iel]  # NB: mod_T = h_T**2
+
+    for ie in range(no_edges):
+        nTE = mesh.edge_normal[iel][ie]
+        vE = localV[1 + ie]
+
+        # Compute outer product manually
+        A11 += vE[0] * nTE[0]
+        A12 += vE[0] * nTE[1]
+        A21 += vE[1] * nTE[0]
+        A22 += vE[1] * nTE[1]
+
+    # Scale by 1/mod_T
+    scale = 1.0 / mod_T
+    A11 *= scale
+    A12 *= scale
+    A21 *= scale
+    A22 *= scale
+
+    return A11, A12, A21, A22, b1, b2
 
 
 def get_v_rec(mesh, iel, dof): # version that uses get_v_rec_from_localV
@@ -308,6 +371,30 @@ def get_v_rec(mesh, iel, dof): # version that uses get_v_rec_from_localV
     polynomials = get_local_polynomials (mesh, iel, dof)
 
     return get_v_rec_from_localV(mesh, iel, polynomials)
+
+def get_v_rec_fast(mesh, iel, dof): # version that uses get_v_rec_from_localV
+    """
+    Provides coefficients of r^{k+1}_T for the local basis function
+    associated to the local degree of freedom w.r.t. the canonical basis.
+    i.e. returns [A, b] if r^{k+1}_T = A*(x-xT)+ b (x, xT, b are in R^2)
+    In particular, A is the gradient to use in aT, and b is the average
+
+    Args:
+        mesh      (ddr.Mesh): mesh
+        iel            (int): element index
+        dof            (int): local degree of freedom
+
+    Returns:
+        np.array       (2*2): A (grad r^{k+1}_T)
+        np.array       (2*1): b
+
+    Raises:
+        ...
+    """
+    # get \underline{phi}_T
+    polynomials = get_local_polynomials (mesh, iel, dof)
+
+    return get_v_rec_from_localV_fast(mesh, iel, polynomials)
 
 
 
@@ -451,6 +538,111 @@ def local_contribution_sT(mesh, v_rec, iel, i, j):
 
     return contribution
 
+def local_contribution_aT_fast(mesh, v_rec, iel, i, j, nu):
+    """
+    Calculate local contribution aT (grad:grad)
+
+    Args:
+        mesh (Mesh2D): mesh
+        v_rec (list): list of velocity reconstruction format tuple
+        iel  (int): element index
+        i    (int): local dof 1
+        j    (int): local dof 2
+        nu (float): element viscosity
+
+    Returns:
+        real: local contribution
+
+    Raises:
+        ...
+    """
+    # get coefficients of velocity reconstruction
+    # Axy_i stands for A_i[x][y]
+    A11_i, A12_i, A21_i, A22_i, b_1_i, b_2_i = v_rec[iel][i - 1] # skip pressure dof
+    A11_j, A12_j, A21_j, A22_j, b_1_j, b_2_j = v_rec[iel][j - 1] # skjp pressure dof
+    # take symmetric part of gradient
+    sym_grad_11_i = A11_i
+    sym_grad_12_i = 0.5*(A12_i + A21_i)
+    sym_grad_21_i = sym_grad_12_i
+    sym_grad_22_i = A22_i
+
+    sym_grad_11_j = A11_j
+    sym_grad_12_j = 0.5*(A12_j + A21_j)
+    sym_grad_21_j = sym_grad_12_j
+    sym_grad_22_j = A22_j    
+    # get element surface
+    mod_T = mesh.element_surface [iel]
+    # get D(u):D(v)
+    double_dot_product = (sym_grad_11_i*sym_grad_11_j + sym_grad_12_i*sym_grad_12_j +
+                          sym_grad_21_i*sym_grad_21_j + sym_grad_22_i*sym_grad_22_j)
+    return nu*mod_T*2*double_dot_product
+
+
+
+def local_contribution_sT_fast(mesh, v_rec, iel, i, j):
+    """
+    Calculate local contribution sT (stabilization)
+
+    Args:
+        mesh (ddr.Mesh): mesh
+        v_rec (list): list of velocity reconstrunction format tuple
+        iel  (int): element index
+        i    (int): local dof 1
+        j    (int): local dof 2
+
+    Returns:
+        real: local contribution
+    """
+    contribution = 0.0
+
+    # Get velocity reconstruction coefficients
+    A11_i, A12_i, A21_i, A22_i, b1_i, b2_i = v_rec[iel][i - 1]
+    A11_j, A12_j, A21_j, A22_j, b1_j, b2_j = v_rec[iel][j - 1]
+
+    # Get element geometry
+    mod_T = mesh.element_surface[iel]  # Element area
+    xT = mesh.element_barycenter[iel]
+
+    # Element contribution
+    proj_i_T_x = b1_i
+    proj_i_T_y = b2_i
+    proj_j_T_x = b1_j
+    proj_j_T_y = b2_j
+
+    v_i_T_x, v_i_T_y = get_local_polynomials(mesh, iel, i)[0]
+    v_j_T_x, v_j_T_y = get_local_polynomials(mesh, iel, j)[0]
+
+    contribution += (
+        ((proj_i_T_x - v_i_T_x) * (proj_j_T_x - v_j_T_x) +
+         (proj_i_T_y - v_i_T_y) * (proj_j_T_y - v_j_T_y)) / mod_T
+    )
+
+    # Face contributions
+    edge_per_elem = len(mesh.elem2edge[iel])
+    for ie in range(edge_per_elem):
+        # Get edge geometry
+        glob_ie = mesh.elem2edge[iel][ie]
+        xE = mesh.edge_xE[glob_ie]
+        mod_E = mesh.edge_length[glob_ie]
+
+        # Projection at edge
+        proj_i_E_x = b1_i + A11_i * (xE[0] - xT[0]) + A12_i * (xE[1] - xT[1])
+        proj_i_E_y = b2_i + A21_i * (xE[0] - xT[0]) + A22_i * (xE[1] - xT[1])
+
+        proj_j_E_x = b1_j + A11_j * (xE[0] - xT[0]) + A12_j * (xE[1] - xT[1])
+        proj_j_E_y = b2_j + A21_j * (xE[0] - xT[0]) + A22_j * (xE[1] - xT[1])
+
+        # Face polynomials
+        v_i_E_x, v_i_E_y = get_local_polynomials(mesh, iel, i)[1 + ie]
+        v_j_E_x, v_j_E_y = get_local_polynomials(mesh, iel, j)[1 + ie]
+
+        contribution += (
+            ((proj_i_E_x - v_i_E_x) * (proj_j_E_x - v_j_E_x) +
+             (proj_i_E_y - v_i_E_y) * (proj_j_E_y - v_j_E_y)) / mod_E
+        )
+
+    return contribution
+
 
 def local_contribution_bT(mesh, iel, i):
     """
@@ -538,6 +730,50 @@ def assemble_A (mesh, v_rec, nu_in, nu_ex):
 
     return A
 
+def assemble_A_fast (mesh, v_rec, nu_in, nu_ex):
+    """
+    Assembles matrix A (constant viscosity)
+
+    Args:
+        mesh      (Mesh2D): mesh
+        v_rec       (list): velocity reconstruction (list with elems [A,b])
+        nu_in      (float): viscosity internal
+        nu_ext     (float): viscosity external
+
+    Returns:
+        np.array(no_v_dofs, no_v_dofs): matrix A
+
+    Raises:
+        ErrorType: Description of when this error might be raised.
+    """
+    no_p_dofs = count_dof(mesh)[0]
+    no_v_dofs = count_dof(mesh)[1]
+    A = np.zeros([no_v_dofs, no_v_dofs])
+
+    for iel in range(len(mesh.elem2node)):
+
+        # determine element viscosity
+        if (mesh.side_mask[iel]==0):
+            nu = nu_in
+        else:
+            nu = nu_ex
+
+        edge_per_elem = len(mesh.elem2edge[iel])
+        no_loc_dofs = 1 + 2*(1 + edge_per_elem)
+
+        for i in range(1, no_loc_dofs):   # skip pressure dof
+            glob_i = dof_loc2glob(mesh, iel, i)
+            for j in range(1, no_loc_dofs):
+                glob_j = dof_loc2glob(mesh, iel, j)
+                shifted_i = glob_i - no_p_dofs # offset in matrix which has dim: no_v_dofs*no_v_dofs
+                shifted_j = glob_j - no_p_dofs # offset in matrix which has dim: no_v_dofs*no_v_dofs
+
+                A[shifted_i, shifted_j] = A[shifted_i, shifted_j] +\
+                                    local_contribution_aT_fast (mesh, v_rec, iel, i, j, nu) +\
+                                    local_contribution_sT_fast (mesh, v_rec, iel, i, j)      # stab
+
+    return A
+
 def assemble_STAB (mesh):
     """
     Assembles only stabilisation component of matrix A (debugging purpose)
@@ -596,11 +832,12 @@ def assemble_B (mesh):
                                     local_contribution_bT (mesh, iel, i)
     return B
 
-def assemble_JP (mesh, v_rec, verbose = False):
+
+def assemble_JP(mesh, v_rec, verbose=False):
     """
-    Assembles the Jump Penalization term,
-    necessary to recover stability at lowest order (k=0)
-    See di2020hybrid, sec. 7.6
+    Faster implementation of the Jump Penalization term assembly.
+    Necessary to recover stability at lowest order (k=0).
+    See di2020hybrid, sec. 7.6.
 
     Args:
        mesh (mesh2D): mesh
@@ -610,215 +847,220 @@ def assemble_JP (mesh, v_rec, verbose = False):
     Returns:
        np.array: JP (jump penalization matrix)
     """
-#    def quadrature_order_3 (f, x0, x1):
-#        """
-#        Cavalieri-Simpson quadrature formula
-#        Exact for polynomials with degree <= 3
-#
-#        Args:
-#            f (lambda): function to integrate
-#            x0 (np.array): first extreme
-#            x1 (np.array): second extreme
-#        Returns:
-#            float (integral)
-#        """
-#        points = [x0, 0.5*(x0+x1), x1]
-#        values = [f(p[0], p[1]) for p in points]
-#        h = mema.R2_norm(x1-x0) # interval length
-#        weights = [h/6, 4*h/6, h/6]
-#        return sum ([value*weight for [value, weight] in zip(values, weights)])
-
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
     JP = np.zeros([no_v_dofs, no_v_dofs])
 
-    # get edge to element connectivity
-    if mesh.edge2elem == []:
+    # Ensure edge-to-element connectivity is available
+    if not mesh.edge2elem:
         mesh.edge2elem = mesh.generate_edge2elem()
     edge2elem = mesh.edge2elem
 
-    # loop over edges
-    for ie in range(len(edge2elem)):
+    # Precompute quadrature points and weights
+    quad_points = [0.0, 0.5, 1.0]
+    quad_weights = [1.0 / 6, 4.0 / 6, 1.0 / 6]
 
-        if (verbose):
-            print ("> adding contributions for edge: ", ie)
-            print ("")
+    # Loop over edges
+    for ie, associated_elems in enumerate(edge2elem):
+        if verbose:
+            print(f"> Adding contributions for edge: {ie}\n")
 
-        # get extrema of edge and lenght
-        first_iel = edge2elem[ie][0] # at least one elem is associated to edge
-        first_elem = mesh.elem2node[first_iel]
-        first_elem2edge = mesh.elem2edge[first_iel] # list of global idxs of edges of first_iel
-        local_ie = [k for (k, iedge) in enumerate(first_elem2edge) if iedge==ie][0] # get local idx of edge wrt first_ie,
-                                                                              # which is also local idx of its first vertex
-        xE0 = mesh.coords[first_elem[local_ie]]
-        xE1 = mesh.coords[first_elem[(local_ie+1)%len(first_elem)]]
-        hE = mema.R2_norm (xE1 - xE0)
+        # Get edge geometry
+        first_iel = associated_elems[0]
+        local_ie = next(k for k, iedge in enumerate(mesh.elem2edge[first_iel]) if iedge == ie)
+        xE0 = mesh.coords[mesh.elem2node[first_iel][local_ie]]
+        xE1 = mesh.coords[mesh.elem2node[first_iel][(local_ie + 1) % len(mesh.elem2node[first_iel])]]
+        hE = mema.R2_norm(xE1 - xE0)
 
-        # get table of DOFs connected to the edge
-        # table is a list of lists of the type:
-        # [element, local_dof, is_shared, other_side],
-        # with other_side beign a list [opposite_iel, local_dof_on_opposite_iel]
-        # (necessary to reconstruct on other side)
-        # is_shared is stored because for shared dofs the reconstruction comes from both sides
-        # we treat in the same way el/el interface edges and boundary edges
+        # Precompute edge midpoint and scaled quadrature points
+        edge_midpoint = 0.5 * (xE0 + xE1)
+        scaled_quad_points = [xE0 + t * (xE1 - xE0) for t in quad_points]
+
+        # Build DOF table
         dof_table = []
-
-        # loop over associated elements to assemble dof_table
-        associated_elems = edge2elem[ie]
-        for side, iel in enumerate(associated_elems):
+        for iel in associated_elems:
             elem = mesh.elem2node[iel]
-            # add element dof (2 components)
-            for component in range(2):
-                dof_table.append ([iel, 1 + component, False, []]) # beware the dof for pressure
-            # loop on sides to add edge dofs
-            for local_ie in range(len(elem)):
-                # check if side is shared (in case of boundary, simply it is not)
-                edge = mesh.elem2edge[iel][local_ie]
-                opposite_side = [k for k in associated_elems if k!= iel]
-                if (opposite_side !=[]):
-                    # edge is elem/elem interface
-                    opposite_iel = opposite_side[0]
-                    check_local_ie_opposite = [k for (k, opposite_edge) in enumerate (mesh.elem2edge[opposite_iel]) if opposite_edge==edge]
-                    if (check_local_ie_opposite!=[]):
-                        is_shared = True
-                        local_ie_opposite = check_local_ie_opposite[0]
-                    else:
-                        is_shared = False
-                else:
-                    # edge on boundary
-                    is_shared = False
-
-               # loop on components (2 for each edge)
-                for component in range(2):
-                    local_dof = 1+ 2+ 2*local_ie + component # beware of pressure and elem velocity
+            for component in range(2):  # Element velocity components
+                dof_table.append([iel, 1 + component, False, []])
+            for local_ie, edge in enumerate(mesh.elem2edge[iel]):
+                is_shared = edge in edge2elem and len(edge2elem[edge]) > 1
+                for component in range(2):  # Edge velocity components
+                    local_dof = 1 + 2 + 2 * local_ie + component
+                    other_side = []
                     if is_shared:
-                        local_dof_opposite = 1 + 2 + 2*local_ie_opposite + component
+                        opposite_iel = next(e for e in edge2elem[edge] if e != iel)
+                        local_dof_opposite = 1 + 2 + 2 * next(
+                            k for k, opp_edge in enumerate(mesh.elem2edge[opposite_iel]) if opp_edge == edge
+                        ) + component
                         other_side = [opposite_iel, local_dof_opposite]
-                    else:
-                        other_side = []
-
                     dof_table.append([iel, local_dof, is_shared, other_side])
 
-        if (verbose):
-            print (">>dof_table: ")
-            for dof_descriptor in dof_table:
-                print (dof_descriptor)
+        # Compute contributions
+        for dof_i in dof_table:
+            iel_i, loc_dof_i, is_shared_i, other_side_i = dof_i
+            glob_dof_i = dof_loc2glob(mesh, iel_i, loc_dof_i)
+            A_i_0, b_i_0 = v_rec[iel_i][loc_dof_i - 1]
+            xT_i_0 = mesh.element_barycenter[iel_i]
+            A_i_1, b_i_1, xT_i_1 = (np.zeros((2, 2)), np.zeros(2), np.zeros(2))
+            if is_shared_i:
+                opposite_iel_i, opposite_loc_dof_i = other_side_i
+                A_i_1, b_i_1 = v_rec[opposite_iel_i][opposite_loc_dof_i - 1]
+                xT_i_1 = mesh.element_barycenter[opposite_iel_i]
 
-
-        # loop twice over dofs in dof_table (i, j)
-        for dof_descriptor_i in dof_table:
-
-          # get local dofs and elements
-          iel_i, loc_dof_i = dof_descriptor_i[0:2]
-          # get if shared
-          is_shared_i = dof_descriptor_i[2]
-          # get global dofs
-          glob_dof_i = dof_loc2glob (mesh, iel_i, loc_dof_i)
-
-          ## side 0 (side of the considered dof)
-          [A_i_0, b_i_0] = v_rec[iel_i][loc_dof_i - 1]
-          xT_i_0 = mesh.element_barycenter[iel_i]
-
-          #pot_i_el_0 = lambda x,y: np.dot(A_i_0, np.array([x,y]) - xT_i_0 ) + b_i_0
-
-          # get potential reconstructions from 2 sides (as lambda functions)
-
-          ## side 1 (side opposite to the dof)
-          # if dof is not shared, the reconstruction on the other side is just 0,
-          # otherwise it has to be calculated taking the local dof on the opposite side
-          if (is_shared_i):
-              # dof is shared
-              opposite_iel_i, opposite_loc_dof_i = dof_descriptor_i[3]
-              opposite_glob_dof_i = dof_loc2glob (mesh, opposite_iel_i, opposite_loc_dof_i)
-              [A_i_1, b_i_1] = v_rec[opposite_iel_i][opposite_loc_dof_i - 1]
-              xT_i_1 = mesh.element_barycenter[opposite_iel_i]
-
-              #pot_i_el_1 = lambda x,y: np.dot(A_i_1, np.array([x,y]) - xT_i_1 ) + b_i_1
-          else:
-              #pot_i_el_1 = lambda x, y: 0.0*x*y
-              [A_i_1, b_i_1] = [np.array([[0., 0.], [0., 0.]]), np.array([0., 0.])]
-              xT_i_1 = np.array([0., 0.]) # any value, anyway multiplied by 0
-
-          # by convention jump is value on first associated element minus value on second
-          # associated element and jump is null if edge is on boundary
-
-          #jump_pot_i = lambda x, y: (-pot_i_el_1(x, y) +pot_i_el_0(x, y))*(2*(iel_i==associated_elems[0]) - 1)*(len(associated_elems)==2)
-
-          for dof_descriptor_j in dof_table:
-
-                # get local dofs and elements
-                iel_j, loc_dof_j = dof_descriptor_j[0:2]
-                # get if shared
-                is_shared_j = dof_descriptor_j[2]
-                # get global dofs
-                glob_dof_j = dof_loc2glob (mesh, iel_j, loc_dof_j)
-
-                # get potential reconstructions from 2 sides (as lambda functions)
-
-                ## side 0
-                [A_j_0, b_j_0] = v_rec[iel_j][loc_dof_j - 1]
+            for dof_j in dof_table:
+                iel_j, loc_dof_j, is_shared_j, other_side_j = dof_j
+                glob_dof_j = dof_loc2glob(mesh, iel_j, loc_dof_j)
+                A_j_0, b_j_0 = v_rec[iel_j][loc_dof_j - 1]
                 xT_j_0 = mesh.element_barycenter[iel_j]
-
-                #pot_j_el_0 = lambda x,y: np.dot(A_j_0, np.array([x,y]) - xT_j_0 ) + b_j_0
-
-                ## side 1
-                if (is_shared_j):
-                    # dof is shared
-                    opposite_iel_j, opposite_loc_dof_j = dof_descriptor_j[3]
-                    opposite_glob_dof_j = dof_loc2glob (mesh, opposite_iel_j, opposite_loc_dof_j)
-                    [A_j_1, b_j_1] = v_rec[opposite_iel_j][opposite_loc_dof_j - 1]
+                A_j_1, b_j_1, xT_j_1 = (np.zeros((2, 2)), np.zeros(2), np.zeros(2))
+                if is_shared_j:
+                    opposite_iel_j, opposite_loc_dof_j = other_side_j
+                    A_j_1, b_j_1 = v_rec[opposite_iel_j][opposite_loc_dof_j - 1]
                     xT_j_1 = mesh.element_barycenter[opposite_iel_j]
-                    #pot_j_el_1 = lambda x,y: np.dot(A_j_1, np.array([x,y]) - xT_j_1 ) + b_j_1
 
-                else:
-                    #pot_j_el_1 = lambda x, y: 0.0*x*y
-                    [A_j_1, b_j_1] = [np.array([[0., 0.], [0., 0.]]), np.array([0., 0.])]
-                    xT_j_1 = np.array([0., 0.]) # any value, anyway multiplied by 0
-
-                # by convention jump is value on first associated element minus value on second
-                # associated element
-
-                #jump_pot_j = lambda x, y: (-pot_j_el_1(x, y) +pot_j_el_0(x, y))*(2*(iel_j==associated_elems[0]) - 1)*(len(associated_elems)==2)
-
-                # Avoid Lambda Functions and get reconstruction via their representation [A, b]
-                # also, embed quadrature without calling an internal function
-
-                if (len(associated_elems)==2):
-                    sign_i = 2*(iel_i==associated_elems[0]) - 1
-                    sign_j = 2*(iel_j==associated_elems[0]) - 1
-
-                    integral_prod_jumps = 0.0
-                    quad_points = [xE0, 0.5*(xE0 +xE1), xE1]
-                    quad_weights = [hE/6, 4*hE/6, hE/6]
-                    for i_quad in range(3):
-                        x_quad = quad_points[i_quad]
+                # Compute integral of product of jumps
+                integral_prod_jumps = 0.0
+                if len(associated_elems) == 2:
+                    sign_i = 2 * (iel_i == associated_elems[0]) - 1
+                    sign_j = 2 * (iel_j == associated_elems[0]) - 1
+                    for i_quad, x_quad in enumerate(scaled_quad_points):
                         pot_i_0 = np.dot(A_i_0, x_quad - xT_i_0) + b_i_0
                         pot_i_1 = np.dot(A_i_1, x_quad - xT_i_1) + b_i_1
                         pot_j_0 = np.dot(A_j_0, x_quad - xT_j_0) + b_j_0
                         pot_j_1 = np.dot(A_j_1, x_quad - xT_j_1) + b_j_1
-                        pot_jump_i = (-pot_i_1 + pot_i_0)*sign_i
-                        pot_jump_j = (-pot_j_1 + pot_j_0)*sign_j
-                        integral_prod_jumps += quad_weights[i_quad]*np.dot(pot_jump_i, pot_jump_j)
-                else:
-                    integral_prod_jumps = 0.0
+                        pot_jump_i = (-pot_i_1 + pot_i_0) * sign_i
+                        pot_jump_j = (-pot_j_1 + pot_j_0) * sign_j
+                        integral_prod_jumps += quad_weights[i_quad] * np.dot(pot_jump_i, pot_jump_j)
 
-                # get product of jumps over edge (remark jump should b 0 for DOF on edge ie)
-
-                #product_of_jumps = lambda x, y: np.dot(jump_pot_i(x, y), jump_pot_j(x, y))
-
-                # add contribution
-                # contribution is halved if a dof is shared
-                # for example: the same contribution is calculated 2*2 = 4 times if dof_i and dof_j
-                # are both at the interface between the 2 elements
-
-                # need to shift the index because matrix has size no_v_dof
-                #JP [glob_dof_i - no_p_dofs , glob_dof_j - no_p_dofs ] += quadrature_order_3(product_of_jumps, xE0, xE1)/hE\
-                JP [glob_dof_i - no_p_dofs , glob_dof_j - no_p_dofs ] += integral_prod_jumps/hE\
-                                               *(1-0.5*(is_shared_i))\
-                                               *(1-0.5*(is_shared_j))
-
+                JP[glob_dof_i - no_p_dofs, glob_dof_j - no_p_dofs] += (
+                    integral_prod_jumps / hE * (1 - 0.5 * is_shared_i) * (1 - 0.5 * is_shared_j)
+                )
 
     return JP
 
+def assemble_JP_fast(mesh, glob_dof_table, v_rec, verbose=False):
+    """
+    Faster implementation of the Jump Penalization term assembly.
+    It relies on the global dof table to avoid recomputing the local
+    to global mapping for each element. It avoids using numpy functions
+    to speed up the process, especially in the internal loops
+
+    Args:
+       mesh (mesh2D): mesh
+       glob_dof_table (list): glob2loc DOF table
+       v_rec (list): list of velocity reconstruction format [A,b]
+       verbose (bool): verbosity flag
+
+    Returns:
+       np.array: JP (jump penalization matrix)
+    """
+    no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
+    JP = np.zeros([no_v_dofs, no_v_dofs])
+
+    # Ensure edge-to-element connectivity is available
+    if not mesh.edge2elem:
+        mesh.edge2elem = mesh.generate_edge2elem()
+    edge2elem = mesh.edge2elem
+
+    # Precompute quadrature points and weights
+    quad_points = [0.0, 0.5, 1.0]
+    quad_weights = [1.0 / 6, 4.0 / 6, 1.0 / 6]
+
+    # Loop over edges
+    for ie, associated_elems in enumerate(edge2elem):
+        if verbose:
+            print(f"> Adding contributions for edge: {ie}\n")
+
+        # Get edge geometry
+        first_iel = associated_elems[0]
+        local_ie = next(k for k, iedge in enumerate(mesh.elem2edge[first_iel]) if iedge == ie)
+        xE0 = mesh.coords[mesh.elem2node[first_iel][local_ie]]
+        xE1 = mesh.coords[mesh.elem2node[first_iel][(local_ie + 1) % len(mesh.elem2node[first_iel])]]
+        hE = mema.R2_norm(xE1 - xE0)
+
+        # Precompute edge midpoint and scaled quadrature points
+        edge_midpoint = 0.5 * (xE0 + xE1)
+        scaled_quad_points = [xE0 + t * (xE1 - xE0) for t in quad_points]
+
+        # Build DOF table
+        dof_table = []
+        for iel in associated_elems:
+            elem = mesh.elem2node[iel]
+            for component in range(2):
+                local_dof = 1 + component    # Element velocity components
+                global_dof = glob_dof_table[iel][local_dof]
+                dof_table.append([iel, local_dof, global_dof, False, []])
+            for local_ie, edge in enumerate(mesh.elem2edge[iel]):
+                is_shared = edge in edge2elem and len(edge2elem[edge]) > 1
+                for component in range(2):  # Edge velocity components
+                    local_dof = 1 + 2 + 2 * local_ie + component
+                    try:
+                        global_dof = glob_dof_table[iel][local_dof]
+                    except Exception as e:
+                        print ("LOOK:", local_dof, glob_dof_table, len(mesh.elem2node[iel]))
+                        raise
+                    other_side = []
+                    if is_shared:
+                        opposite_iel = next(e for e in edge2elem[edge] if e != iel)
+                        local_dof_opposite = 1 + 2 + 2 * next(
+                            k for k, opp_edge in enumerate(mesh.elem2edge[opposite_iel]) if opp_edge == edge
+                        ) + component
+                        other_side = [opposite_iel, local_dof_opposite]
+                    dof_table.append([iel, local_dof, global_dof, is_shared, other_side])
+
+        # Compute contributions
+        for dof_i in dof_table:
+            iel_i, loc_dof_i, glob_dof_i, is_shared_i, other_side_i = dof_i
+            A_11_i0, A_12_i0, A_21_i0, A_22_i0, b_1_i0, b_2_i0 = v_rec[iel_i][loc_dof_i - 1]
+            xT_i_0 = mesh.element_barycenter[iel_i]
+            A_11_i1, A_12_i1, A_21_i1, A_22_i1, b_1_i1, b_2_i1 = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+            if is_shared_i:
+                opposite_iel_i, opposite_loc_dof_i = other_side_i
+                A_11_i1, A_12_i1, A_21_i1, A_22_i1, b_1_i1, b_2_i1 = v_rec[opposite_iel_i][opposite_loc_dof_i - 1]
+                xT_i_1 = mesh.element_barycenter[opposite_iel_i]
+
+            for dof_j in dof_table:
+                iel_j, loc_dof_j, glob_dof_j, is_shared_j, other_side_j = dof_j
+                A_11_j_0, A_12_j_0, A_21_j_0, A_22_j_0, b_1_j_0, b_2_j_0 = v_rec[iel_j][loc_dof_j - 1]
+                xT_j_0 = mesh.element_barycenter[iel_j]
+                A_11_j_1, A_12_j_1, A_21_j_1, A_22_j_1, b_1_j_1, b_2_j_1 = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                if is_shared_j:
+                    opposite_iel_j, opposite_loc_dof_j = other_side_j
+                    A_11_j_1, A_12_j_1, A_21_j_1, A_22_j_1, b_1_j_1, b_2_j_1 = v_rec[opposite_iel_j][opposite_loc_dof_j - 1]
+                    xT_j_1 = mesh.element_barycenter[opposite_iel_j]
+
+                # Compute integral of product of jumps
+                integral_prod_jumps = 0.0
+                if len(associated_elems) == 2:
+                    sign_i = 2 * (iel_i == associated_elems[0]) - 1
+                    sign_j = 2 * (iel_j == associated_elems[0]) - 1
+                    for i_quad, x_quad in enumerate(scaled_quad_points):
+                        # Compute potentials for element i
+                        pot_i_0_x = A_11_i0 * (x_quad[0] - xT_i_0[0]) + A_12_i0 * (x_quad[1] - xT_i_0[1]) + b_1_i0
+                        pot_i_0_y = A_21_i0 * (x_quad[0] - xT_i_0[0]) + A_22_i0 * (x_quad[1] - xT_i_0[1]) + b_2_i0
+                        pot_i_1_x = A_11_i1 * (x_quad[0] - xT_i_1[0]) + A_12_i1 * (x_quad[1] - xT_i_1[1]) + b_1_i1
+                        pot_i_1_y = A_21_i1 * (x_quad[0] - xT_i_1[0]) + A_22_i1 * (x_quad[1] - xT_i_1[1]) + b_2_i1
+
+                        # Compute potentials for element j
+                        pot_j_0_x = A_11_j_0 * (x_quad[0] - xT_j_0[0]) + A_12_j_0 * (x_quad[1] - xT_j_0[1]) + b_1_j_0
+                        pot_j_0_y = A_21_j_0 * (x_quad[0] - xT_j_0[0]) + A_22_j_0 * (x_quad[1] - xT_j_0[1]) + b_2_j_0
+                        pot_j_1_x = A_11_j_1 * (x_quad[0] - xT_j_1[0]) + A_12_j_1 * (x_quad[1] - xT_j_1[1]) + b_1_j_1
+                        pot_j_1_y = A_21_j_1 * (x_quad[0] - xT_j_1[0]) + A_22_j_1 * (x_quad[1] - xT_j_1[1]) + b_2_j_1
+
+                        # Compute jumps
+                        pot_jump_i_x = (-pot_i_1_x + pot_i_0_x) * sign_i
+                        pot_jump_i_y = (-pot_i_1_y + pot_i_0_y) * sign_i
+                        pot_jump_j_x = (-pot_j_1_x + pot_j_0_x) * sign_j
+                        pot_jump_j_y = (-pot_j_1_y + pot_j_0_y) * sign_j
+
+                        # Compute dot product of jumps
+                        dot_product_jumps = pot_jump_i_x * pot_jump_j_x + pot_jump_i_y * pot_jump_j_y
+                        integral_prod_jumps += quad_weights[i_quad] * dot_product_jumps
+
+                JP[glob_dof_i - no_p_dofs, glob_dof_j - no_p_dofs] += (
+                    integral_prod_jumps / hE * (1 - 0.5 * is_shared_i) * (1 - 0.5 * is_shared_j)
+                )
+
+    return JP
 
 def assemble_b_f (mesh, f):
     """
@@ -1159,7 +1401,7 @@ def visualize_solution (mesh, v_p, fig, axes, cmaps = ["magma", "viridis"], arro
     cbar.set_label('$p$', fontsize = 40)
 
 
-def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, dt, advect = True):
+def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, dt, ref_vol, advect = True):
     """
     Displace interface transferring velocity from mesh edges
 
@@ -1167,6 +1409,8 @@ def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, dt, advect
         mesh (mema.Mesh2D): mesh
         intface (mema.disk_intface): interface
         p_v_lambda (np.array): stokes solution format (p,v,lambda)
+        dt (float): time step
+        rf_vol (float): volume of the interface
         advect (boolean): whether or not to advect
 
     Returns:
@@ -1188,7 +1432,7 @@ def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, dt, advect
     # advect intface
 
     if (advect):
-        new_intface = intface.advect(dt)
+        new_intface = intface.advect(ref_vol, dt)
     else:
         new_intface = copy.deepcopy(intface)
 
@@ -1220,6 +1464,7 @@ def solve_stokes (mesh, ref_sol_v, vol_force, nu_in, nu_ex, intface = None,\
     """
 
     no_dof_p, no_dof_v, no_tot_dof = count_dof (mesh)
+    dof_table = compute_dof_table(mesh) # precompute dof table
 
     # Calculate velocity reconstruction for every velocity element and velocity DOF
     # List such that v_rec[iel][loc_v_dof] = [A, b] (such that r^+1 = A(x-x_T) + b)
@@ -1252,6 +1497,95 @@ def solve_stokes (mesh, ref_sol_v, vol_force, nu_in, nu_ex, intface = None,\
     B = assemble_B (mesh)
     if (jump_penalization):
         JP = assemble_JP (mesh, v_rec, verbose=False)
+    else:
+        JP = 0*A
+    b_f = assemble_b_f (mesh, vol_force)
+    if (with_surface_tension):
+        t_gamma = intface.calc_t_gamma()
+        if (external_tension!=None):
+            t_gamma = [t_gamma[k] - external_tension[k] for k in range(len(t_gamma))] # attention to sign
+        b_gamma = assemble_b_gamma(mesh, t_gamma)
+    else:
+        b_gamma = 0*b_f
+
+    b_v = b_f
+    b_v = b_f + b_gamma #----------------> sign change of b_gamma
+
+    # build global system (follow convention (p, v) for block ordering)
+
+    zero_block = np.zeros((no_dof_p, no_dof_p))
+    S = np.block([[zero_block, np.transpose(B)], [B, A + JP]])
+    b_p = np.zeros(no_dof_p)
+    b = np.concatenate([b_p, b_v])
+
+    # Enforce boundary conditions (dirichlet bnd conds on velocity, zero avg cond on pressure)
+    ## attention, system dimension augmented by 1 to account for a Lagrange multiplier
+    [S, b] = impose_bc(mesh, S, b, ref_sol_v)
+
+    ## Convert to sparse and solve (pay attention to Lagrange multiplier)
+    S_sparse = csr_matrix(S)
+    p_v_lambda = spsolve(S_sparse, b)
+
+    return [p_v_lambda, S, b, A, B, JP, b_gamma]
+
+def solve_stokes_fast (mesh, ref_sol_v, vol_force, nu_in, nu_ex,\
+                       intface = None, with_surface_tension = False,\
+                       external_tension = None, jump_penalization = False):
+    """
+    Solve Stokes problem with an interface and surface tension
+
+    Args:
+        mesh  (mema.Mesh2D): mesh
+        intface (mema.disk_interface): interface
+        ref_sol_v  (lambda): reference velocity
+        vol_force  (lambda):
+        nu          (float): viscosity (up to now uniform)
+        external_tension (list(np.array)): external tension (e.g. Maxwell)
+        jump_penalization (boolean): whether o apply jump penalization
+
+    Returns:
+             p_v_lambda  (np.array): solution (p, v, lambda) where lambda
+                                     is Lagrange multiplier
+             S (np.array): global system matrix (after bnd conditions)
+             b (np.array): global system array  (after bnd conditions)
+             A (np.array): matrix grad_s:grad_s
+             B (np.array): matrix div*q
+             PJ(np.array): jump penalization
+             b_gamma (np.array): global system array  (after bnd conditions)
+    """
+
+    no_dof_p, no_dof_v, no_tot_dof = count_dof (mesh)
+    glob_dof_table = compute_dof_table(mesh) # precompute dof table
+
+    # Calculate velocity reconstruction for every velocity element and velocity DOF
+    # List such that v_rec[iel][loc_v_dof] = [A, b] (such that r^+1 = A(x-x_T) + b)
+    # attention: when accessing v_rec[iel][v_dof], v_dof is shifted by 1 with respect to indexes of total dofs (skip pressure dof)
+
+    no_elems = len(mesh.elem2node)
+    v_rec = []
+
+    for iel in range(no_elems):
+        element_recs = []
+        # Reconstruction for element v dofs
+        for coord in range(2): # loop over x,y
+            v_dof_T_coord = 1 + coord
+
+            element_recs.append(get_v_rec_fast(mesh, iel, v_dof_T_coord))
+
+        no_edge = len(mesh.elem2edge[iel])
+        for ie in range(no_edge):
+            for coord in range(2):
+                v_dof_E_coord = 3 + ie*2 + coord
+
+                element_recs.append(get_v_rec_fast(mesh, iel, v_dof_E_coord)) # as a tuple 
+
+        v_rec.append(element_recs)
+
+    # Assemble matrices and vector of linear system
+    A = assemble_A_fast (mesh, v_rec, nu_in, nu_ex)
+    B = assemble_B (mesh)
+    if (jump_penalization):
+        JP = assemble_JP_fast (mesh, v_rec, glob_dof_table, verbose=False)
     else:
         JP = 0*A
     b_f = assemble_b_f (mesh, vol_force)
