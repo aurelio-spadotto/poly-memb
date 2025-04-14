@@ -937,7 +937,7 @@ def assemble_JP(mesh, v_rec, verbose=False):
 
     return JP
 
-def assemble_JP_fast(mesh, glob_dof_table, v_rec, verbose=False):
+def assemble_JP_fast(mesh, v_rec, glob_dof_table, verbose=False):
     """
     Faster implementation of the Jump Penalization term assembly.
     It relies on the global dof table to avoid recomputing the local
@@ -1013,6 +1013,7 @@ def assemble_JP_fast(mesh, glob_dof_table, v_rec, verbose=False):
             A_11_i0, A_12_i0, A_21_i0, A_22_i0, b_1_i0, b_2_i0 = v_rec[iel_i][loc_dof_i - 1]
             xT_i_0 = mesh.element_barycenter[iel_i]
             A_11_i1, A_12_i1, A_21_i1, A_22_i1, b_1_i1, b_2_i1 = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+            xT_i_1 = (0.0, 0.0)
             if is_shared_i:
                 opposite_iel_i, opposite_loc_dof_i = other_side_i
                 A_11_i1, A_12_i1, A_21_i1, A_22_i1, b_1_i1, b_2_i1 = v_rec[opposite_iel_i][opposite_loc_dof_i - 1]
@@ -1023,6 +1024,7 @@ def assemble_JP_fast(mesh, glob_dof_table, v_rec, verbose=False):
                 A_11_j_0, A_12_j_0, A_21_j_0, A_22_j_0, b_1_j_0, b_2_j_0 = v_rec[iel_j][loc_dof_j - 1]
                 xT_j_0 = mesh.element_barycenter[iel_j]
                 A_11_j_1, A_12_j_1, A_21_j_1, A_22_j_1, b_1_j_1, b_2_j_1 = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+                xT_j_1 = (0.0, 0.0)
                 if is_shared_j:
                     opposite_iel_j, opposite_loc_dof_j = other_side_j
                     A_11_j_1, A_12_j_1, A_21_j_1, A_22_j_1, b_1_j_1, b_2_j_1 = v_rec[opposite_iel_j][opposite_loc_dof_j - 1]
