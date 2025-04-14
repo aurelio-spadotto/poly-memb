@@ -1159,7 +1159,7 @@ def visualize_solution (mesh, v_p, fig, axes, cmaps = ["magma", "viridis"], arro
     cbar.set_label('$p$', fontsize = 40)
 
 
-def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, dt, advect = True):
+def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, ref_vol, dt, advect = True):
     """
     Displace interface transferring velocity from mesh edges
 
@@ -1167,6 +1167,7 @@ def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, dt, advect
         mesh (mema.Mesh2D): mesh
         intface (mema.disk_intface): interface
         p_v_lambda (np.array): stokes solution format (p,v,lambda)
+        ref_vol (float): reference volume
         advect (boolean): whether or not to advect
 
     Returns:
@@ -1188,7 +1189,7 @@ def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, dt, advect
     # advect intface
 
     if (advect):
-        new_intface = intface.advect(dt)
+        new_intface = intface.advect(ref_vol, dt)
     else:
         new_intface = copy.deepcopy(intface)
 

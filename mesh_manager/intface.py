@@ -240,9 +240,9 @@ class disk_interface:
         Advect interface using velocity
 
         Args:
-            ref_vol (float): reference volume 
+            ref_vol (float): reference volume
             delta_t (float): time step
-           
+
         Returns:
             disk_intface: moved interface
         """
