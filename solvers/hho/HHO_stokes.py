@@ -11,6 +11,8 @@ from matplotlib import ticker
 from matplotlib.ticker import ScalarFormatter
 from matplotlib.ticker import NullFormatter
 from scipy.sparse import csr_matrix
+from scipy.sparse import lil_matrix
+from scipy.sparse import bmat, vstack
 from scipy.sparse.linalg import spsolve
 import random
 import copy
@@ -704,7 +706,7 @@ def assemble_A (mesh, v_rec, nu_in, nu_ex):
     """
     no_p_dofs = count_dof(mesh)[0]
     no_v_dofs = count_dof(mesh)[1]
-    A = np.zeros([no_v_dofs, no_v_dofs])
+    A = lil_matrix((no_v_dofs, no_v_dofs))
 
     for iel in range(len(mesh.elem2node)):
 
@@ -748,7 +750,7 @@ def assemble_A_fast (mesh, v_rec, nu_in, nu_ex):
     """
     no_p_dofs = count_dof(mesh)[0]
     no_v_dofs = count_dof(mesh)[1]
-    A = np.zeros([no_v_dofs, no_v_dofs])
+    A = lil_matrix((no_v_dofs, no_v_dofs))
 
     for iel in range(len(mesh.elem2node)):
 
@@ -787,7 +789,7 @@ def assemble_STAB (mesh):
     """
     no_p_dofs = count_dof(mesh)[0]
     no_v_dofs = count_dof(mesh)[1]
-    STAB = np.zeros([no_v_dofs, no_v_dofs])
+    STAB = lil_matrix((no_v_dofs, no_v_dofs))
 
     for iel in range(len(mesh.elem2node)):
         edge_per_elem = len(mesh.elem2edge[iel])
@@ -817,7 +819,7 @@ def assemble_B (mesh):
         np.array(no_v_dofs, no_p_dofs): matrix B
     """
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
-    B = np.zeros([no_v_dofs, no_p_dofs])
+    B = lil_matrix((no_v_dofs, no_p_dofs))
 
     for iel in range(len(mesh.elem2node)):
         edge_per_elem = len(mesh.elem2edge[iel])
@@ -848,7 +850,7 @@ def assemble_JP(mesh, v_rec, verbose=False):
        np.array: JP (jump penalization matrix)
     """
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
-    JP = np.zeros([no_v_dofs, no_v_dofs])
+    JP = lil_matrix((no_v_dofs, no_v_dofs))
 
     # Ensure edge-to-element connectivity is available
     if not mesh.edge2elem:
@@ -954,7 +956,7 @@ def assemble_JP_fast(mesh, v_rec, glob_dof_table, verbose=False):
        np.array: JP (jump penalization matrix)
     """
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
-    JP = np.zeros([no_v_dofs, no_v_dofs])
+    JP = lil_matrix((no_v_dofs, no_v_dofs))
 
     # Ensure edge-to-element connectivity is available
     if not mesh.edge2elem:
@@ -1076,7 +1078,7 @@ def assemble_b_f (mesh, f):
         np.array(no_v_dofs): vector b
     """
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
-    b = np.zeros(no_v_dofs)
+    b = lil_matrix((no_v_dofs, 1))
 
     for iel in range(len(mesh.elem2node)):
         edge_per_elem = len(mesh.elem2edge[iel])
@@ -1103,7 +1105,7 @@ def assemble_b_gamma(mesh, t_gamma):
         np.array(no_v_dofs): linear system system vector tau
     """
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
-    b_gamma = np.zeros(no_v_dofs)
+    b_gamma = lil_matrix((no_v_dofs,1))
 
     # loop over interface couples
     for icut, cut in enumerate(mesh.cuts):
@@ -1129,8 +1131,8 @@ def assemble_b_gamma(mesh, t_gamma):
             p2 = mesh.coords[mesh.elem2node[iel_in][(local_edge_idx+1)%len(mesh.elem2node[iel_in])]]
             hE = mema.R2_norm(p2-p1)
             # update with contribution
-            b_gamma[shift_dof_x] = b_gamma[shift_dof_x] + t_gamma[intf_ie][0]*hE
-            b_gamma[shift_dof_y] = b_gamma[shift_dof_y] + t_gamma[intf_ie][1]*hE
+            b_gamma[shift_dof_x,0] = b_gamma[shift_dof_x,0] + t_gamma[intf_ie][0]*hE
+            b_gamma[shift_dof_y,0] = b_gamma[shift_dof_y,0] + t_gamma[intf_ie][1]*hE
 
     return b_gamma
 
@@ -1257,12 +1259,15 @@ def impose_bc(mesh, S, b, ref_sol_v, zero_mean=True):
     if (zero_mean):
         no_p_dof = count_dof(mesh)[0]
         no_tot_dof = count_dof(mesh)[2]
-        S_aug = np.zeros((no_tot_dof + 1, no_tot_dof + 1))
-        b_aug = np.zeros(no_tot_dof + 1)
-        S_aug[0:no_tot_dof, 0:no_tot_dof] = S
-        b_aug[0:no_tot_dof] = b
-
+        #S_aug = np.zeros((no_tot_dof + 1, no_tot_dof + 1))
+        #b_aug = np.zeros(no_tot_dof + 1)
+        S_aug = bmat([[S, None], [None, lil_matrix((1,1))]], format="lil")
         S_aug[0:no_p_dof, no_tot_dof] = 1
+        b_aug = vstack([b, lil_matrix((1, 1))], format="lil")
+
+        #S_aug[0:no_tot_dof, 0:no_tot_dof] = S
+        #b_aug[0:no_tot_dof] = b
+        
 
         for iel in range(len(mesh.elem2node)):
             mod_T = mesh.element_surface [iel]
@@ -1286,6 +1291,7 @@ def visualize_solution (mesh, v_p, fig, axes, cmaps = ["magma", "viridis"], arro
         arrows     (string): if "edge" edge velocity is represented with arrows,
                              otherwise element velocity.
         arrow_density (int): from 0 to 6 to increase arrows that are displayed
+        fig, ax            : if given
 
     Returns: void
     """
@@ -1391,16 +1397,16 @@ def visualize_solution (mesh, v_p, fig, axes, cmaps = ["magma", "viridis"], arro
     sm = cm.ScalarMappable(cmap=cmaps[0], norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, orientation='horizontal', pad=0.05)
-    cbar.ax.tick_params(labelsize=14)
-    cbar.set_label('$|\!|v|\!|$', fontsize = 40)
+    cbar.ax.tick_params(labelsize=30)
+    cbar.set_label('$|\!|v|\!|$', fontsize = 80)
     # colorbar settings for pressure axes
     ax = axes[1]
     norm = mcolors.Normalize(vmin=min_p, vmax=max_p)
     sm = cm.ScalarMappable(cmap=cmaps[1], norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, orientation='horizontal', pad=0.05)
-    cbar.ax.tick_params(labelsize=14)
-    cbar.set_label('$p$', fontsize = 40)
+    cbar.ax.tick_params(labelsize=30)
+    cbar.set_label('$p$', fontsize = 80)
 
 
 def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, ref_vol, dt, advect = True):
@@ -1434,7 +1440,6 @@ def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, ref_vol, d
     # advect intface
 
     if (advect):
-        new_intface = intface.advect(ref_vol, dt)
         new_intface = intface.advect(ref_vol, dt)
     else:
         new_intface = copy.deepcopy(intface)
@@ -1605,18 +1610,17 @@ def solve_stokes_fast (mesh, ref_sol_v, vol_force, nu_in, nu_ex,\
 
     # build global system (follow convention (p, v) for block ordering)
 
-    zero_block = np.zeros((no_dof_p, no_dof_p))
-    S = np.block([[zero_block, np.transpose(B)], [B, A + JP]])
-    b_p = np.zeros(no_dof_p)
-    b = np.concatenate([b_p, b_v])
+    # zero_block = lil_matrix((no_dof_p, no_dof_p))
+    S = bmat([[None, B.transpose()], [B, A + JP]], format="lil")
+    b_p = lil_matrix((no_dof_p,1))
+    b = vstack([b_p, b_v], format = "lil")
 
     # Enforce boundary conditions (dirichlet bnd conds on velocity, zero avg cond on pressure)
     ## attention, system dimension augmented by 1 to account for a Lagrange multiplier
     [S, b] = impose_bc(mesh, S, b, ref_sol_v)
 
-    ## Convert to sparse and solve (pay attention to Lagrange multiplier)
-    S_sparse = csr_matrix(S)
-    p_v_lambda = spsolve(S_sparse, b)
+    ## Convert to csr and solve (pay attention to Lagrange multiplier)
+    p_v_lambda = spsolve(S.tocsr(), b.tocsr())
 
     return [p_v_lambda, S, b, A, B, JP, b_gamma]
 
