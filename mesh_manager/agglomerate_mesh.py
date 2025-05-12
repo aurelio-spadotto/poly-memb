@@ -294,7 +294,7 @@ def agglomerate (mesh, ref_mesh, cryt_size, cryt_skewness, verbose=False):
     agglomerated_mesh.intface_edges = agglomerated_mesh.generate_intface_edges()
 
     # set side mask
-    mema.fill_side_mask(agglomerated_mesh)
+    mema.fill_side_mask(agglomerated_mesh, len(ref_mesh.coords))
 
     # agglomeration product
     agglomeration_products = [agglomerations, agglomerate_elems, final_agglomerating, intface_data]

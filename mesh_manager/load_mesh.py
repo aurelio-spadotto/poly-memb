@@ -429,7 +429,8 @@ def visualize_mesh(mesh, ax, display_no_nodes = False,\
                              display_couples = False,\
                              cmap='magma', \
                              display_node_id= False,\
-                             show_barycenter= False):
+                             show_barycenter= False,
+                             display_nodal_dof= False):
     """
     Display mesh and related info
 
@@ -438,10 +439,55 @@ def visualize_mesh(mesh, ax, display_no_nodes = False,\
         display_side     (boolean): whether to display color of side
         display_node_id  (boolean): whether to show index of nodes
         show_barycenter  (boolean): whether to show element barycenter
+        display_nodal_dof(boolean): whether to show dof numeber of points
     """
+    def glob_nodal_dof (mesh, iel, ino): # this may be useful in general as a mesh method, consider moving inside class
+        """
+        Provide global dof index of node of an element in the sense of ddrin
+        (dofs are doubled along interface)
+
+        Args:
+           mesh (mesh2D): mesh
+           iel     (int): element index
+           ino     (int): node index
+           no_elems_init     (int): original numer of element
+        """
+
+
+        # get number of interface points (= total number of interface edges)
+        no_intface_points = sum([len(intface_edges_list) for intface_edges_list in mesh.intface_edges])
+        # check if element is on interface (index appears in mesh.gamma_couples)
+        side = -1
+        for icut in range(len(mesh.cuts)):
+            if (mesh.cuts[icut][0][0] == iel):
+                side = 0
+                first_ie = mesh.cuts[icut][1][0]
+            elif(mesh.cuts[icut][0][1] == iel):
+                side = 1
+                first_ie = mesh.cuts[icut][1][1]
+            no_intface_edges = len(mesh.intface_edges[icut])
+
+        if (side > 0 and ino >= first_ie and ino < first_ie + no_intface_edges):
+            # check side, if external dof is index of point + no_intface_points
+            # (interface points come last in mesh.coords and in global dof ordering you have
+            # (dof_internal_points, dof_intface_points_in, dof_intface_points_ext))
+            return mesh.elem2node[iel][ino] + no_intface_points
+        else:
+            return mesh.elem2node[iel][ino]
+
+
 
     colmap = plt.get_cmap(cmap)
     colors = ['red', 'blue', 'grey']
+
+    if (display_nodal_dof):
+        for iel, elem in enumerate(mesh.elem2node):
+            verts = [mesh.coords[ino] for ino in elem]
+            for ino, point in enumerate(verts):
+                text_pos = point
+                text= str(glob_nodal_dof(mesh, iel, ino))
+                ax.text(text_pos[0], text_pos[1], text, fontsize=13, color='black', clip_on=True)
+
 
     if (display_side and display_couples):
         raise ValueError("cannot show both side and couples")

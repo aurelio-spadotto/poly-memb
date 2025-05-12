@@ -157,9 +157,9 @@ def break_mesh(mesh, intface, execute_fill_side_mask = True, verbose = False): #
     if (verbose):
        print (">> in fill_side_mask")
     if execute_fill_side_mask:
-        fill_side_mask(new_mesh)
+        fill_side_mask(new_mesh, no_initial_points)
     else:
-        fill_side_mask(new_mesh, only_initialize = True)
+        fill_side_mask(new_mesh, no_initial_points, only_initialize = True)
 
     return new_mesh
 
@@ -921,14 +921,14 @@ def no_check_and_add_new_points (new_coords, new_points):
 ########################################################################################
 
 
-def fill_side_mask(mesh, only_initialize = False):
+def fill_side_mask(mesh, no_initial_points, only_initialize = False):
     """
     Complete side mask by extrapolating value at interface up to the border
     (uses dofs associated to nodes as in ddrin)
 
     Args:
       mesh (mesh2D): mesh
-      no_elems_init     (int): original numer of element
+      no_initial_points (int): number of points before break_mesh
     """
 
     def glob_nodal_dof (mesh, iel, ino): # this may be useful in general as a mesh method, consider moving inside class
@@ -956,12 +956,13 @@ def fill_side_mask(mesh, only_initialize = False):
                 side = 1
                 first_ie = mesh.cuts[icut][1][1]
             no_intface_edges = len(mesh.intface_edges[icut])
-
-        if (side > 0 and ino >= first_ie and ino < first_ie + no_intface_edges):
+        
+        no_points_elem = len(mesh.elem2node[iel])
+        if (side > 0 and mesh.elem2node[iel][ino]>no_initial_points):
             # check side, if external dof is index of point + no_intface_points
             # (interface points come last in mesh.coords and in global dof ordering you have
             # (dof_internal_points, dof_intface_points_in, dof_intface_points_ext))
-            return mesh.elem2node[iel][ino] + no_intface_points
+            return (mesh.elem2node[iel][ino]-no_initial_points) + len(mesh.coords)
         else:
             return mesh.elem2node[iel][ino]
 
@@ -995,7 +996,11 @@ def fill_side_mask(mesh, only_initialize = False):
     # loop until complete exploration
     done = False
     it = 0
-    maxit = 10000
+    if (only_initialize):
+        maxit = 0
+    else:
+        maxit = 500
+
     while (not done and it <maxit):
         done= True
         # loop over elements, check if side still to assign and try to assign it
@@ -1014,9 +1019,7 @@ def fill_side_mask(mesh, only_initialize = False):
                     dof = glob_nodal_dof(mesh, iel, ino)
                     dof_side_mask[dof] = mesh.side_mask[iel]
         it = it + 1
-        if (it == 1 and only_initialize): # execute only first round if only interface elements are to be marked
-            return
 
-    if (it==maxit):
+    if (it==maxit and not only_initialize):
              warnings.warn("The procedure to assign side exceeds max iterations")
 
