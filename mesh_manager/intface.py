@@ -72,13 +72,12 @@ class disk_interface:
 
         N = len(self.edges)
         for ino in range(N):
-            edge_l = self.edges[(ino-1)%N]
-            edge_r = self.edges[ino]
+            edge_l    = self.edges[(ino-1)%N]
+            edge_r    = self.edges[ino]
             tangent_l = self.coords[edge_l[1]] - self.coords[edge_l[0]]
             tangent_r = self.coords[edge_r[1]] - self.coords[edge_r[0]]
-            norm_l = gmi.R2_norm(tangent_l)
-            norm_r = gmi.R2_norm(tangent_r)
-
+            norm_l    = gmi.R2_norm(tangent_l)
+            norm_r    = gmi.R2_norm(tangent_r)
             cos_theta = np.dot(tangent_l, tangent_r)/(norm_l*norm_r)
             curvature.append(np.arccos(cos_theta)/(0.5*(norm_l + norm_r)))
 
@@ -164,15 +163,17 @@ class disk_interface:
         """
 
         # calculate curvature at nodes with turning angle method
-        curvature = self.calc_curvature ()
+        curvature          = self.calc_curvature ()
         # apply Laplace_Beltrami operator (1D laplacian) to curvature
-        LB_curvature = self.apply_LB(curvature)
+        LB_curvature       = self.apply_LB(curvature)
         # get list of normals at nodes (have to transfer) #XXX: not sure this is safe
-        edge_normal = self.calc_normal()
-        normal = self.transfer_edge2node(edge_normal)
+        edge_normal        = self.calc_normal()
+        hE                 = self.calc_edge_length()
+        scaled_edge_normal = [n*L for [n,L] in zip(edge_normal, hE)]
+        normal             = self.transfer_edge2node(scaled_edge_normal)
         # calculate Helfrich bending stress at nodes
-        F_bnd = [self.k_b*(1/2*curv**3 + LB_curv)*n \
-                        for [curv, LB_curv, n] in zip(curvature, LB_curvature, normal)]
+        F_bnd              = [self.k_b*(1/2*curv**3 + LB_curv)*n \
+                           for [curv, LB_curv, n] in zip(curvature, LB_curvature, normal)]
 
         return F_bnd
 
@@ -185,16 +186,15 @@ class disk_interface:
         Returns:
             list(np.array): nodal force (vector)
         """
-        N = len(self.edges)
-        F_str = [np.array([0., 0.])]*N
-
-        init_length = self.init_edge_length
+        N              = len(self.edges)
+        F_str          = [np.array([0., 0.])]*N
+        init_length    = self.init_edge_length
         current_length = self.calc_edge_length()
 
         for ie in range(N):
-            edge = self.edges[ie]
-            p0 = edge[0]
-            p1 = edge[1]
+            edge    = self.edges[ie]
+            p0      = edge[0]
+            p1      = edge[1]
             tangent = self.coords[p1] - self.coords[p0]
             tangent = tangent/gmi.R2_norm(tangent)
 
@@ -203,8 +203,8 @@ class disk_interface:
             else:
                 tension = self.k_str*(current_length[ie]-init_length[ie])/init_length[ie]
 
-            F_str[ie] = F_str[ie] + tension*tangent
-            F_str[(ie+1)%N] =F_str[(ie+1)%N] - tension*tangent
+            F_str[ie]       = F_str[ie] + tension*tangent
+            F_str[(ie+1)%N] = F_str[(ie+1)%N] - tension*tangent
 
         return F_str
 
@@ -219,18 +219,9 @@ class disk_interface:
             list: ransferred data
         """
 
-        #edge_length = self.calc_edge_length()
-        #edge_length_left = edge_length
-        #edge_length_right = [edge_length[(k+1)%len(data)] for k in range(len(data))]
-
-        data_left = data
-        data_right = [data[(k - 1)%len(data)] for k in range(len(data))]
-
-        #transferred_data = [ (edge_length_left[k]*data_left[k] + edge_length[k]*data_right[k])/\
-        #                     (edge_length_left[k] + edge_length_right[k]) for k in range(len(data))]
-
-        transferred_data = [ 0.5*(data_left[k] + data_right[k]) for k in range(len(data))]
-
+        data_left          = data
+        data_right         = [data[(k - 1)%len(data)] for k in range(len(data))]
+        transferred_data   = [ 0.5*(data_left[k] + data_right[k]) for k in range(len(data))]
 
         return transferred_data
 

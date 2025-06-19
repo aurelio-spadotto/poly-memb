@@ -1600,13 +1600,13 @@ def solve_stokes_fast (mesh, ref_sol_v, vol_force, nu_in, nu_ex,\
     if (with_surface_tension):
         t_gamma = intface.calc_t_gamma()
         if (external_tension!=None):
-            t_gamma = [t_gamma[k] - external_tension[k] for k in range(len(t_gamma))] # attention to sign
+            t_gamma = [t_gamma[k] + external_tension[k] for k in range(len(t_gamma))]
         b_gamma = assemble_b_gamma(mesh, t_gamma)
     else:
         b_gamma = 0*b_f
 
     b_v = b_f
-    b_v = b_f + b_gamma #----------------> sign change of b_gamma
+    b_v = b_f + b_gamma 
 
     # build global system (follow convention (p, v) for block ordering)
 
