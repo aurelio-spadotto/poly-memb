@@ -279,6 +279,57 @@ def initialize_disk_interface(N, rho, k_b, k_str):
 
     return disk_interface (edges, coords, k_b, k_str, initial=True)
 
+def initialize_interface_from_stl(intface_filename, rho, k_b, k_str):
+    """
+    Create the interface reading an stl file
+
+    Args:
+        intface_filename (string): path to stl file
+        rho (float): radius of the disk
+    """
+    coords = extract_first_vertex_coordinates(intface_filename)
+    N = len(coords)
+    edges = [[ied, (ied+1)%N] for ied in range(N)]
+
+    return disk_interface (edges, coords, k_b, k_str, initial=True)
+
+def extract_first_vertex_coordinates(stl_file_path):
+    """
+    Extract list of coordinated from file
+
+    Args:
+        stl_file_path (string): path to file
+    Returns:
+        list
+    """
+    vertices = []
+    with open(stl_file_path, 'r') as file:
+        lines = file.readlines()
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            if line.startswith("outer loop"):
+                # Leggi la riga successiva per il primo vertex
+                vertex_line = lines[i+1].strip()
+                if vertex_line.startswith("vertex"):
+                    parts = vertex_line.split()
+                    x = float(parts[1])
+                    y = float(parts[2])
+                    vertices.append(np.array([x, y]))
+            i += 1
+
+    return vertices
+
+# Esempio di utilizzo
+stl_file_path = "percorso/al/tuo/file.stl"  # Sostituisci con il percorso del tuo file STL
+coordinates = extract_first_vertex_coordinates(stl_file_path)
+
+for coord in coordinates:
+    print(coord)
+
+
+
 
 def calc_membrane_volume (intface):
     """
