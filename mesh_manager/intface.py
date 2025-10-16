@@ -140,7 +140,7 @@ class disk_interface:
 
     def calc_t_gamma (self):
         """
-        Calculates surface tension $t_\Gamma$ by calculating nodal
+        Calculates surface tension $t_Gamma$ by calculating nodal
         forces and transferring onto edges with correct scaling
 
         Returns:
@@ -279,7 +279,7 @@ def initialize_disk_interface(N, rho, k_b, k_str):
 
     return disk_interface (edges, coords, k_b, k_str, initial=True)
 
-def initialize_interface_from_stl(intface_filename, rho, k_b, k_str):
+def initialize_interface_from_stl(intface_filename, k_b, k_str):
     """
     Create the interface reading an stl file
 
@@ -321,27 +321,17 @@ def extract_first_vertex_coordinates(stl_file_path):
 
     return vertices
 
-# Esempio di utilizzo
-stl_file_path = "percorso/al/tuo/file.stl"  # Sostituisci con il percorso del tuo file STL
-coordinates = extract_first_vertex_coordinates(stl_file_path)
-
-for coord in coordinates:
-    print(coord)
-
-
-
-
 def calc_membrane_volume (intface):
     """
     Calculates  volume of surface
 
     Args:
-         u (np.array): P^1(\Gamma_h)
+         u (np.array): P^1(Gamma_h)
     """
     def normalize (x):
         """
-        Applies operator N: P^1 (\Gamma_h)-->P^0 (\Gamma_h)
-        calculates the normal n_\Gamma given a position vector x
+        Applies operator N: P^1 (Gamma_h)-->P^0 (Gamma_h)
+        calculates the normal n_Gamma given a position vector x
 
         Args:
             x (np.array): nodal position x

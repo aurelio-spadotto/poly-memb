@@ -349,7 +349,7 @@ class mesh2D:
 
         return [min_hT, max_hT]
 
-def load_square_mesh(filename, bnd_dof_type="edge"):
+def load_square_mesh(filename, bnd_dof_type="edge", scaling=1.0):
     """
     Loads and parses a 2D mesh in msh format
 
@@ -357,6 +357,7 @@ def load_square_mesh(filename, bnd_dof_type="edge"):
     - filename: path to the mesh file
     - no_points_per_elem = increase size of elem2edge columns to fit polygonal elements
     - bnd_dof_type (logical): type of dofs on the boundary
+    - scaling (double): scaling
 
     Returns:
     - Mesh object
@@ -369,7 +370,7 @@ def load_square_mesh(filename, bnd_dof_type="edge"):
     elem2node = elem2node.astype(int)
     elem2node = [list(elem) for elem in elem2node]
     # node coordinates (convert to list, but a list of np.arrays)
-    coords = mesh.points [:,0:2]
+    coords = mesh.points [:,0:2]*scaling
     coords = list(coords)
     # determine semiside
     d = max([max(abs(point)) for point in coords])
@@ -493,9 +494,14 @@ def visualize_mesh(mesh, ax, display_no_nodes = False,\
         raise ValueError("cannot show both side and couples")
 
     for iel, elem in enumerate(mesh.elem2node):
-        verts = [mesh.coords[ino] for ino in elem]
-
+        
         # draw polygon
+        verts = [mesh.coords[ino] for ino in elem]
+        node_per_elem = len(mesh.elem2node[iel])
+        element = Polygon(verts, closed=True, edgecolor='black',\
+                          facecolor=colmap(1-node_per_elem/20), alpha=0.8)
+        ax.add_patch(element)
+
         if (display_node_id):
             for ino,point in enumerate(verts):
                 text_pos = point
@@ -503,11 +509,7 @@ def visualize_mesh(mesh, ax, display_no_nodes = False,\
                 ax.text(text_pos[0], text_pos[1], text, fontsize=13, color='black', clip_on=True)
 
         if (display_no_nodes):
-            node_per_elem = len(mesh.elem2node[iel])
-            element = Polygon(verts, closed=True, edgecolor='black',\
-                              facecolor=colmap(1-node_per_elem/20), alpha=0.8)
-            ax.add_patch(element)
-            # write no of vertices
+           # write no of vertices
             bary = mesh.barycenter(iel)
             text_pos = bary
             text= str(node_per_elem)
