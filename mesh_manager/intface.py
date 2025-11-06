@@ -248,6 +248,8 @@ class disk_interface:
 
         if (vol_corr):
             coords_adjust = volume_conservation_postproc (new_coords, ref_vol)
+        else:
+            coords_adjust = new_coords
 
         return disk_interface(self.edges, coords_adjust, self.k_b, self.k_str, initial=False,\
                               init_edge_length=self.init_edge_length, velocity = self.velocity)
