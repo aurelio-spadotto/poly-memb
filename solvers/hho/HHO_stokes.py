@@ -1409,7 +1409,7 @@ def visualize_solution (mesh, v_p, fig, axes, cmaps = ["magma", "viridis"], arro
     cbar.set_label('$p$', fontsize = 80)
 
 
-def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, ref_vol, dt, advect = True):
+def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, ref_vol, dt, advect = True, vol_corr=True):
     """
     Displace interface transferring velocity from mesh edges
 
@@ -1440,7 +1440,7 @@ def transfer_velocity_and_advect_interface(mesh, intface, p_v_lambda, ref_vol, d
     # advect intface
 
     if (advect):
-        new_intface = intface.advect(ref_vol, dt)
+        new_intface = intface.advect(ref_vol, dt, vol_corr)
     else:
         new_intface = copy.deepcopy(intface)
 
