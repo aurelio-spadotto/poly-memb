@@ -6,16 +6,40 @@ import copy
 import warnings
 import sys
 
+def default_cryterion (elem_coords):
+    """
+    Check if cryterion to refine is respected
+    XXX dummy cryterion 
 
-def refine_mesh(mesh0, debug= False):
+    Args:
+        elem_coords: element node coordinates
+    Returns:
+        bool
+    """
+    node_dist_from_circle = [ (gmi.R2_norm(p) - 0.25) for p in elem_coords] # radius of the vertices
+    first_value = node_dist_from_circle[0]
+    for idx in range(1,len(node_dist_from_circle)):
+        next_value = node_dist_from_circle[idx]
+        if (first_value*next_value<0):
+            return True
+    return False
+
+
+def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=None, debug= False):
     """
     Refines a triangular mesh; triangular in shape,
     but not necessarily as for no of points
     (we want to be able to realize several levels of refinement)
-    XXX: currently with a dummy cryterion
 
     Args:
         mesh(mema.mesh2D): mesh to refine
+        cryterion(callable): a function that specifies the cryterion to
+                             refine an element. It has signature:
+                             cryterion(elem_coords, *add_args), where
+                             elem_coords is the list of coordinates of nodes
+                             of an element, and add_args is a list of additional
+                             arguments
+        additional_arguments(list): addtional arguments for cryterion 
         debug (bool): print messages 
     Returns:
         mema.mesh2D
@@ -38,8 +62,11 @@ def refine_mesh(mesh0, debug= False):
         
         nodes = new_elem2node[iel] # the dynamical version, potentially already modified with new nodes
         elem_node_coords = [new_coords[node] for node in nodes]
-        
-        if (cryterion_checked(elem_node_coords)):
+        v0, v1, v2 = vertex_indices = get_triangle_vertices(new_elem2node, new_coords, iel) # local indexes of triangle
+                                                                           # element could be a pseudo-polygon
+        elem_triangle_vertices = [elem_node_coords[k] for k in vertex_indices] # coordinates of vertices
+
+        if (cryterion(elem_triangle_vertices, *additional_arguments)):
 
             #if debug: 
                 # if counter > 2: break
@@ -52,7 +79,7 @@ def refine_mesh(mesh0, debug= False):
             if debug: print ("Coords of nodes of element to refine: ", elem_node_coords)
             # get the vertices (3 nodes thata are vertices of triangle)
             # it is ok to suppose that the vertices are three even when applying recursively,
-            v0, v1, v2 = get_triangle_vertices(new_elem2node, new_coords, iel) # local indexes
+
             # get the three segments of the boundary (with extrema included)
             segments = [
                 nodes[v0:v1+1],
@@ -134,23 +161,6 @@ def refine_mesh(mesh0, debug= False):
 
     return lm.mesh2D(new_elem2node, new_coords, bnd_dof_type='edge', d=mesh0.d)
 
-def cryterion_checked (elem_coords):
-    """
-    Check if cryterion to refine is respected
-    XXX dummy cryterion 
-
-    Args:
-        elem_coords: element node coordinates
-    Returns:
-        bool
-    """
-    node_dist_from_circle = [ (gmi.R2_norm(p) - 0.25) for p in elem_coords] # radius of the vertices
-    first_value = node_dist_from_circle[0]
-    for idx in range(1,len(node_dist_from_circle)):
-        next_value = node_dist_from_circle[idx]
-        if (first_value*next_value<0):
-            return True
-    return False
 
 def get_triangle_vertices(elem2node, coords, iel):
     """
