@@ -20,6 +20,7 @@ class mesh2D:
     side_mask (list): element mask to define phase (0 int, 1 ext)
     node_bnd_mask  (list(int)): node mask to define if on border and what border (0 if internal, k if on boundary k)
     edge_bnd_mask  (list(int)): edge mask to define if on border
+    elem_bnd_mask  (list(int)): elem mask to define if on border
     cuts (list): for each cut a list in the form: [couple, starting_ie, edge2intface]
                                                    couple: elements along the cut [in, ex]
                                                    starting_ie: local idx of first edge along cut[in, ex]
@@ -49,14 +50,17 @@ class mesh2D:
         # attributes linked to boundary
         self.node_bnd_mask = [-1]*len(self.coords)
         self.edge_bnd_mask = [-1]*self.no_edges
+        self.elem_bnd_mask = [-1]*len(self.elem2node)
 
 
         # set boundary mask
         self.d = d
         if (bnd_dof_type=="node"):
             self.mark_bnd_points()
+            self.mark_bnd_elems()
         if (bnd_dof_type=="edge"):
             self.mark_bnd_edges()
+            self.mark_bnd_elems()
 
         # Pre-calculate metrics
         self.edge_normal = []
@@ -227,6 +231,32 @@ class mesh2D:
                 if ( abs(abs(x_E[0]) -d)<1e-6 or abs(abs(x_E[1]) -d)<1e-6):
                     glob_ie = self.elem2edge[iel][ie]
                     self.edge_bnd_mask[glob_ie]= 1
+
+    def mark_bnd_elems(self):
+       """
+       Assigns the boundary mask for elements;
+       It only works for square boxes
+
+       Convention:
+      -1: internal
+       1: x=-d
+       2: y=-d
+       3: x= d
+       4: y= d
+       """
+       d = self.d
+       #XXX should change load_mesh to directly recognize nodes on boundary when reading,mark_bnd_edges same problem
+       for iel, elem in enumerate(self.elem2node):
+          for ino in elem:
+               if (abs(self.coords[ino][0]+d)<1e-6):
+                   self.elem_bnd_mask[iel]= 1
+               if (abs(self.coords[ino][1]+d)<1e-6):
+                   self.elem_bnd_mask[iel] = 2
+               if (abs(self.coords[ino][0]-d)<1e-6):
+                   self.elem_bnd_mask[iel] = 3
+               if (abs(self.coords[ino][1]-d)<1e-6):
+                   self.elem_bnd_mask[iel] = 4
+
 
 
     def calc_surface(self,iel):
@@ -568,5 +598,5 @@ def visualize_mesh_element_data (mesh, data, ax, binary=True, cmap='magma' ):
             min_data = min(data)
             max_data = max(data)
             element = Polygon(verts, closed=True, edgecolor='black',\
-                              facecolor=cmap((data[iel]-min_data)/max(max_data-min_data, 1e-30)), alpha=0.2)
+                              facecolor=colmap((data[iel]-min_data)/max(max_data-min_data, 1e-30)), alpha=0.2)
         ax.add_patch(element)

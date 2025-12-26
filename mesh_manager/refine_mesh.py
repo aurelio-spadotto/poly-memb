@@ -6,12 +6,13 @@ import copy
 import warnings
 import sys
 
-def default_cryterion (elem_coords):
+def default_cryterion (iel, elem_coords):
     """
     Check if cryterion to refine is respected
     XXX dummy cryterion 
 
     Args:
+        iel (int): element index
         elem_coords: element node coordinates
     Returns:
         bool
@@ -25,7 +26,7 @@ def default_cryterion (elem_coords):
     return False
 
 
-def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=None, debug= False):
+def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=[], debug= False):
     """
     Refines a triangular mesh; triangular in shape,
     but not necessarily as for no of points
@@ -35,9 +36,9 @@ def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=None, d
         mesh(mema.mesh2D): mesh to refine
         cryterion(callable): a function that specifies the cryterion to
                              refine an element. It has signature:
-                             cryterion(elem_coords, *add_args), where
+                             cryterion(iel, elem_coords, *add_args), where
                              elem_coords is the list of coordinates of nodes
-                             of an element, and add_args is a list of additional
+                             of an element (as a pseudo-triangle), and add_args is a list of additional
                              arguments
         additional_arguments(list): addtional arguments for cryterion 
         debug (bool): print messages 
@@ -66,7 +67,7 @@ def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=None, d
                                                                            # element could be a pseudo-polygon
         elem_triangle_vertices = [elem_node_coords[k] for k in vertex_indices] # coordinates of vertices
 
-        if (cryterion(elem_triangle_vertices, *additional_arguments)):
+        if (cryterion(iel, elem_triangle_vertices, *additional_arguments)):
 
             #if debug: 
                 # if counter > 2: break
@@ -109,16 +110,18 @@ def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=None, d
                     subedge1 = [midpoint, v1]
                     # look for element sharing the extrema of the edge (only one must be found)
                     if debug: print ("Edge to be split: ", [v0, v1])
-                    neigh, split_ie = get_neighbor(new_elem2node, iel, v0, v1)
-                    # add the point to the element
-                    neigh_point_list   = new_elem2node[neigh]
-                    neigh_size = len(neigh_point_list)
-                    if debug: print ("Found a neighbor: ", neigh_point_list)
-                    if debug: print ("Insert midpoint after node: ", split_ie)
-                    if debug: print ("Midpoint: ", midpoint)
-                    #new_elem2node[neigh] = neigh_point_list[0:(split_ie+1)%neigh_size]+[midpoint]+neigh_point_list[(split_ie+1)%neigh_size:]
-                    new_elem2node[neigh] = neigh_point_list[0:split_ie+1]+[midpoint]+neigh_point_list[split_ie+1:]
-                    if debug: print ("Modified neighbor:", new_elem2node[neigh])
+                    neigh, split_ie = get_neighbor(new_elem2node, mesh0.elem_bnd_mask, iel, v0, v1)
+                    # if split side is on boundary do nothing
+                    if (not neigh== -1):
+                        # add the point to the element
+                        neigh_point_list   = new_elem2node[neigh]
+                        neigh_size = len(neigh_point_list)
+                        if debug: print ("Found a neighbor: ", neigh_point_list)
+                        if debug: print ("Insert midpoint after node: ", split_ie)
+                        if debug: print ("Midpoint: ", midpoint)
+                        #new_elem2node[neigh] = neigh_point_list[0:(split_ie+1)%neigh_size]+[midpoint]+neigh_point_list[(split_ie+1)%neigh_size:]
+                        new_elem2node[neigh] = neigh_point_list[0:split_ie+1]+[midpoint]+neigh_point_list[split_ie+1:]
+                        if debug: print ("Modified neighbor:", new_elem2node[neigh])
                 # else, get the two subedges
                 else:
                     # get the midpoint; the one with the right coordinate
@@ -186,12 +189,13 @@ def get_triangle_vertices(elem2node, coords, iel):
 
     return vertices
 
-def get_neighbor(elem2node, iel, v0, v1):
+def get_neighbor(elem2node, elem_bnd_mask, iel, v0, v1):
     """
     Look for the element sharing with iel the vertices v0 and v1
 
     Args:
         elem2node(list): current list of element, already modified with new points
+        elem_bnd_mak(list): to check if element lies on boundary
         v0 (int): vertex 0 (index)
         v1 (int): vertex 1 (index)
     Returns:
@@ -206,5 +210,7 @@ def get_neighbor(elem2node, iel, v0, v1):
                 if (node==v1 and candidate[(index+1)%len(candidate)]==v0):
                     return iel_cand, index
         
-    # If not found
+    # If not found and not on boundary
+    if (elem_bnd_mask != -1):
+        return [-1, -1]
     raise ValueError(f"No neighboring element found")
