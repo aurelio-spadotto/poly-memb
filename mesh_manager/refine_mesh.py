@@ -63,11 +63,11 @@ def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=[], deb
         
         nodes = new_elem2node[iel] # the dynamical version, potentially already modified with new nodes
         elem_node_coords = [new_coords[node] for node in nodes]
-        v0, v1, v2 = vertex_indices = get_triangle_vertices(new_elem2node, new_coords, iel) # local indexes of triangle
-                                                                           # element could be a pseudo-polygon
+        v0, v1, v2 = vertex_indices = get_triangle_vertices(elem_node_coords)  # local indexes of triangle
+                                                                               # element could be a pseudo-polygon
         elem_triangle_vertices = [elem_node_coords[k] for k in vertex_indices] # coordinates of vertices
 
-        if (cryterion(iel, elem_triangle_vertices, *additional_arguments)):
+        if (cryterion(iel, elem_node_coords, *additional_arguments)):
 
             #if debug: 
                 # if counter > 2: break
@@ -165,21 +165,21 @@ def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=[], deb
     return lm.mesh2D(new_elem2node, new_coords, bnd_dof_type='edge', d=mesh0.d)
 
 
-def get_triangle_vertices(elem2node, coords, iel):
+def get_triangle_vertices(elem_coords):
     """
     Given a polygon with a triangular shape (such as those that you can get after nonconformal refinement (hanging nodes))
     Extracts the vertices of the triangle (local index)
     Beware: it only works with actual triangles, don't apply after breaking along the mesh
     """
-    nodes    = elem2node[iel]
+    nodes    = elem_coords
     size     = len(nodes)
     vertices = []
 
     for ino, node in enumerate(nodes): 
         # coords of node get adjacent points
-        p       = coords[node]
-        p_left  = coords[nodes[(ino-1)%size]]
-        p_right = coords[nodes[(ino+1)%size]]
+        p       = node
+        p_left  = nodes[(ino-1)%size]
+        p_right = nodes[(ino+1)%size]
         # get the two vectors stemming from p
         v_left  = p_left  - p
         v_right = p_right - p
