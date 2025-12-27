@@ -62,6 +62,7 @@ def refine_mesh(mesh0, cryterion=default_cryterion, additional_arguments=[], deb
     for iel in range(mesh0.no_elems):
         
         nodes = new_elem2node[iel] # the dynamical version, potentially already modified with new nodes
+        if debug: print ("nodes: ", nodes)
         elem_node_coords = [new_coords[node] for node in nodes]
         v0, v1, v2 = vertex_indices = get_triangle_vertices(elem_node_coords)  # local indexes of triangle
                                                                                # element could be a pseudo-polygon
@@ -174,6 +175,7 @@ def get_triangle_vertices(elem_coords):
     nodes    = elem_coords
     size     = len(nodes)
     vertices = []
+    tol = 1e-10
 
     for ino, node in enumerate(nodes): 
         # coords of node get adjacent points
@@ -184,7 +186,7 @@ def get_triangle_vertices(elem_coords):
         v_left  = p_left  - p
         v_right = p_right - p
         # if they dont'make an acute angle they're not vertices
-        if (v_left[0]*v_right[0] + v_left[1]*v_right[1])>0: # dot product is negative for nodes between collinear adjacent points
+        if ( abs(-1.0 - (v_left[0]*v_right[0] + v_left[1]*v_right[1])/(gmi.R2_norm(v_left)*gmi.R2_norm(v_right))) ) > tol: # cos theta approx -1  for nodes between collinear adjacent points
              vertices.append(ino)
 
     return vertices
@@ -214,3 +216,55 @@ def get_neighbor(elem2node, elem_bnd_mask, iel, v0, v1):
     if (elem_bnd_mask != -1):
         return [-1, -1]
     raise ValueError(f"No neighboring element found")
+
+def intface_cryterion (iel, elem_coords, intface):
+    """
+    Check if element is intersected by interface
+
+    Args:
+        iel (int): element index
+        elem_coords(list): element node coordinates
+        intface (mema.disk_intface): interface
+    Returns:
+        bool
+    """
+    # get pseudo triangle
+    vertices_idx = get_triangle_vertices(elem_coords)
+    triangle_coords = [elem_coords[k] for k in vertices_idx]
+
+    hT = gmi.R2_norm(triangle_coords[0]-triangle_coords[1])
+    tol = 1e-6
+    clip = gmi.get_clip(intface.coords, triangle_coords)
+    # intersected if clip is not empty and does not coincide with clipping element (because the latter is entirely contained) 
+    if (clip==[]):
+        return False
+    if (gmi.R2_norm(gmi.barycenter(triangle_coords) - gmi.barycenter(clip))/hT < tol):
+        #print (mema.R2_norm(barycenter(elem_coords) - barycenter(clip))/hT)
+        return False
+    
+    return True
+
+def harmonize_cryterion (iel, elem_coords):
+    """
+    Check if element has neighbors that are too small
+
+    Args:
+        iel (int): element index
+        elem_coords(list): element node coordinates
+    Returns:
+        bool
+    """
+    short_side = 1e16
+    long_side  = 1e-16
+    tol        = 1/2
+    for ino in range(len(elem_coords)):
+        h          = gmi.R2_norm(elem_coords[(ino+1)%len(elem_coords)]-elem_coords[ino])
+        short_side = min(short_side, h)
+        long_side  = max(long_side, h)
+    
+    if (short_side/long_side < tol):
+        return True
+    
+    return False
+
+

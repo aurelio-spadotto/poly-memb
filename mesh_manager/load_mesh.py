@@ -456,7 +456,7 @@ def display_element (mesh, elem, ax, color, width = 1e-4, display_nodes= True):
 
 def visualize_mesh(mesh, ax, display_no_nodes = False,\
                              display_elem_id = False,
-                             display_side = True,\
+                             display_side = False,\
                              display_couples = False,\
                              cmap='magma', \
                              display_node_id= False,\
@@ -529,7 +529,7 @@ def visualize_mesh(mesh, ax, display_no_nodes = False,\
         verts = [mesh.coords[ino] for ino in elem]
         node_per_elem = len(mesh.elem2node[iel])
         element = Polygon(verts, closed=True, edgecolor='black',\
-                          facecolor=colmap(1-node_per_elem/20), alpha=0.8)
+                          facecolor='none')
         ax.add_patch(element)
 
         if (display_node_id):
