@@ -256,7 +256,7 @@ def harmonize_cryterion (iel, elem_coords):
     """
     short_side = 1e16
     long_side  = 1e-16
-    tol        = 1/2
+    tol        = 1/4
     for ino in range(len(elem_coords)):
         h          = gmi.R2_norm(elem_coords[(ino+1)%len(elem_coords)]-elem_coords[ino])
         short_side = min(short_side, h)
