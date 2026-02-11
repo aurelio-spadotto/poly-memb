@@ -1,0 +1,180 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poly-memb &mdash; poly_memb  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            poly_memb
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <!-- Local TOC -->
+              <div class="local-toc"><ul>
+<li><a class="reference internal" href="#">Poly-memb</a></li>
+<li><a class="reference internal" href="#gallery">Gallery</a></li>
+<li><a class="reference internal" href="#modules">Modules</a><ul>
+<li><a class="reference internal" href="#module-mesh-manager">Module: mesh_manager</a></li>
+<li><a class="reference internal" href="#module-solvers">Module: solvers</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#bibliography">Bibliography</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+</div>
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">poly_memb</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Poly-memb</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="poly-memb">
+<h1>Poly-memb<a class="headerlink" href="#poly-memb" title="Link to this heading"></a></h1>
+<p>poly-memb is a Python library implementing a 2D simulator of dynamics of membranes subject to electric fields.
+The module ‘mesh_manager’ provides functions to generate polytopal meshes by cutting and agglomerating
+background meshes intersected by moving interfaces.
+The module ‘solvers’ provides functions to implement polygonal numerical schemes.
+The simulator is based on a Hybrid High Order scheme <span id="id1">[<a class="reference internal" href="#id235" title="D. A. Di Pietro and J. Droniou. The Hybrid High-Order method for polytopal meshes. Number 19 in Modeling, Simulation and Application. Springer International Publishing, 2020. doi:10.1007/978-3-030-37203-3.">1</a>]</span> to solve flow variables
+and a Discrete De Rham <span id="id2">[<a class="reference internal" href="#id237" title="Daniele A. Di Pietro and Jérôme Droniou. An arbitrary-order discrete de Rham complex on polyhedral meshes: Exactness, Poincaré inequalities, and consistency. Found. Comput. Math., 23:85–164, 2023. doi:10.1007/s10208-021-09542-8.">2</a>]</span> scheme to solve for electric variables.</p>
+</section>
+<section id="gallery">
+<h1>Gallery<a class="headerlink" href="#gallery" title="Link to this heading"></a></h1>
+<figure class="align-center align-default" id="id473">
+<a class="reference internal image-reference" href="_images/agglomeration_demo.png"><img alt="Output 1" src="_images/agglomeration_demo.png" style="width: 800px;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Example of supported mesh, before and after agglomeration. The polygonal interface cuts
+originally simplicial elements to originate conformal polygonal subelements.
+The cut procedure is reiterated after movement of the membrane.</span><a class="headerlink" href="#id473" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center align-default" id="id474">
+<a class="reference internal image-reference" href="_images/electric_solver_demo.png"><img alt="Output 2" src="_images/electric_solver_demo.png" style="width: 800px;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Electrostatic potential and electric field resulting from the DDR method.
+The conformal setting allows for seamless treatment of interface conditions.</span><a class="headerlink" href="#id474" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center align-default" id="id475">
+<a class="reference internal image-reference" href="_images/solver_flow_demo.png"><img alt="Output 3" src="_images/solver_flow_demo.png" style="width: 800px;" />
+</a>
+<figcaption>
+<p><span class="caption-text">A HHO solver is used to determine the membrane velocity. Interface edges are embedded as mesh edges.</span><a class="headerlink" href="#id475" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<div class="toctree-wrapper compound">
+</div>
+</section>
+<section id="modules">
+<h1>Modules<a class="headerlink" href="#modules" title="Link to this heading"></a></h1>
+<section id="module-mesh-manager">
+<h2>Module: mesh_manager<a class="headerlink" href="#module-mesh-manager" title="Link to this heading"></a></h2>
+</section>
+<section id="module-solvers">
+<h2>Module: solvers<a class="headerlink" href="#module-solvers" title="Link to this heading"></a></h2>
+</section>
+</section>
+<section id="bibliography">
+<h1>Bibliography<a class="headerlink" href="#bibliography" title="Link to this heading"></a></h1>
+<div class="docutils container" id="id3">
+<div role="list" class="citation-list">
+<div class="citation" id="id235" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">1</a><span class="fn-bracket">]</span></span>
+<p>D. A. Di Pietro and J. Droniou. <em>The Hybrid High-Order method for polytopal meshes</em>. Number 19 in Modeling, Simulation and Application. Springer International Publishing, 2020. <a class="reference external" href="https://doi.org/10.1007/978-3-030-37203-3">doi:10.1007/978-3-030-37203-3</a>.</p>
+</div>
+<div class="citation" id="id237" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id2">2</a><span class="fn-bracket">]</span></span>
+<p>Daniele A. Di Pietro and Jérôme Droniou. An arbitrary-order discrete de Rham complex on polyhedral meshes: Exactness, Poincaré inequalities, and consistency. <em>Found. Comput. Math.</em>, 23:85–164, 2023. <a class="reference external" href="https://doi.org/10.1007/s10208-021-09542-8">doi:10.1007/s10208-021-09542-8</a>.</p>
+</div>
+</div>
+</div>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading"></a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, aurelio_spadotto.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
