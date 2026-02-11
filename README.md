@@ -1,12 +1,15 @@
-# HOW TO INSTALL
+### Installation
 
 ```
 git clone git@github.com:aurelio-spadotto/poly-memb.git
-pip install polymemb
+python3 -m venv .venv-polymemb # if installation in a new venv
+source .venv/bin/activate
+cd poly-memb
+pip install .
 ```
 
 
-# HOW TO IMPORT
+### Import
 
 ```
 from polymemb import mesh_manager as mema
