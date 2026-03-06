@@ -217,9 +217,36 @@ def get_neighbor(elem2node, elem_bnd_mask, iel, v0, v1):
         return [-1, -1]
     raise ValueError(f"No neighboring element found")
 
+#def intface_cryterion (iel, elem_coords, intface):
+#    """
+#    Check if element is intersected by interface
+#
+#    Args:
+#        iel (int): element index
+#        elem_coords(list): element node coordinates
+#        intface (mema.disk_intface): interface
+#    Returns:
+#        bool
+#    """
+#    # get pseudo triangle
+#    vertices_idx = get_triangle_vertices(elem_coords)
+#    triangle_coords = [elem_coords[k] for k in vertices_idx]
+#
+#    hT = gmi.R2_norm(triangle_coords[0]-triangle_coords[1])
+#    tol = 1e-1
+#    clip = gmi.get_clip(intface.coords, triangle_coords)
+#    # intersected if clip is not empty and does not coincide with clipping element (because the latter is entirely contained) 
+#    if (clip==[]):
+#        return False
+#    if (gmi.R2_norm(gmi.barycenter(triangle_coords) - gmi.barycenter(clip))/hT < tol):
+#        print (mema.R2_norm(barycenter(elem_coords) - barycenter(clip))/hT)
+#        return False
+#    
+#    return True
+
 def intface_cryterion (iel, elem_coords, intface):
     """
-    Check if element is intersected by interface
+    Check if element is intersected by interface (new version)
 
     Args:
         iel (int): element index
@@ -231,18 +258,18 @@ def intface_cryterion (iel, elem_coords, intface):
     # get pseudo triangle
     vertices_idx = get_triangle_vertices(elem_coords)
     triangle_coords = [elem_coords[k] for k in vertices_idx]
-
-    hT = gmi.R2_norm(triangle_coords[0]-triangle_coords[1])
-    tol = 1e-6
-    clip = gmi.get_clip(intface.coords, triangle_coords)
-    # intersected if clip is not empty and does not coincide with clipping element (because the latter is entirely contained) 
-    if (clip==[]):
-        return False
-    if (gmi.R2_norm(gmi.barycenter(triangle_coords) - gmi.barycenter(clip))/hT < tol):
-        #print (mema.R2_norm(barycenter(elem_coords) - barycenter(clip))/hT)
-        return False
     
-    return True
+    # Check segment by segment the intface
+    for edge in intface.edges:
+        q0, q1 = [intface.coords[i] for i in edge]
+        # check side by side the triangle
+        for ie in range(3):
+            p0, p1 = [triangle_coords[ie], triangle_coords[(ie+1)%3]]
+            # if intface edge intersects triangle side, cryterion checked
+            if (gmi.calc_intersection_segments(q0, q1, p0, p1)[0]):
+                return True
+    
+    return False
 
 def harmonize_cryterion (iel, elem_coords):
     """
