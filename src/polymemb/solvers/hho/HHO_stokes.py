@@ -1,5 +1,6 @@
 from ... import mesh_manager as mema
 
+from numba import njit
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -12,9 +13,11 @@ from matplotlib import ticker
 from matplotlib.ticker import ScalarFormatter
 from matplotlib.ticker import NullFormatter
 from scipy.sparse import csr_matrix
+from scipy.sparse import coo_matrix
 from scipy.sparse import lil_matrix
 from scipy.sparse import bmat, vstack
 from scipy.sparse.linalg import spsolve
+from scipy.sparse.linalg import minres
 import random
 import copy
 
@@ -751,7 +754,11 @@ def assemble_A_fast (mesh, v_rec, nu_in, nu_ex):
     """
     no_p_dofs = count_dof(mesh)[0]
     no_v_dofs = count_dof(mesh)[1]
-    A = lil_matrix((no_v_dofs, no_v_dofs))
+
+    # three data structures that are needed to assemble a coo matrix
+    rows = []
+    cols = []
+    data  = []
 
     for iel in range(len(mesh.elem2node)):
 
@@ -770,12 +777,20 @@ def assemble_A_fast (mesh, v_rec, nu_in, nu_ex):
                 glob_j = dof_loc2glob(mesh, iel, j)
                 shifted_i = glob_i - no_p_dofs # offset in matrix which has dim: no_v_dofs*no_v_dofs
                 shifted_j = glob_j - no_p_dofs # offset in matrix which has dim: no_v_dofs*no_v_dofs
+                
+                # get contribution (applying boundary condition on velocity)
+                contrib = local_contribution_aT_fast (mesh, v_rec, iel, i, j, nu) +\
+                          local_contribution_sT_fast (mesh, v_rec, iel, i, j)      # stab
 
-                A[shifted_i, shifted_j] = A[shifted_i, shifted_j] +\
-                                    local_contribution_aT_fast (mesh, v_rec, iel, i, j, nu) +\
-                                    local_contribution_sT_fast (mesh, v_rec, iel, i, j)      # stab
+                # assemble in sparse fashion
+                rows.append(shifted_i)
+                cols.append(shifted_j)
+                data.append(contrib)
 
-    return A
+    # use coo sparse matrix format, adapted to matrices built from local contributions
+    A_coo = coo_matrix( (data,(rows, cols)), shape=(no_v_dofs, no_v_dofs))    
+
+    return A_coo
 
 def assemble_STAB (mesh):
     """
@@ -834,6 +849,44 @@ def assemble_B (mesh):
                 B[shifted_i, glob_j] = B[shifted_i, glob_j] +\
                                     local_contribution_bT (mesh, iel, i)
     return B
+
+def assemble_B_fast (mesh):
+    """
+    Assembles matrix B
+
+    Args:
+        mesh (ddr.Mesh): mesh
+
+    Returns:
+        coo_matrix: matrix B
+    """
+    no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
+
+    # data structures for sparse assembly
+    rows = []
+    cols = []
+    data = []
+
+    for iel in range(len(mesh.elem2node)):
+        edge_per_elem = len(mesh.elem2edge[iel])
+        no_loc_dofs = 1 + 2*(1 + edge_per_elem)
+        glob_j = dof_loc2glob (mesh, iel, 0) # global dof of pressure (no shift needed)
+
+        for i in range(1, no_loc_dofs):
+                glob_i = dof_loc2glob(mesh, iel, i)
+                shifted_i = glob_i - no_p_dofs
+                
+                # get local contribution
+                contrib =  local_contribution_bT (mesh, iel, i)
+                # assemble
+                rows.append(shifted_i)
+                cols.append(glob_j)
+                data.append(contrib)
+
+        B_coo = coo_matrix ((data, (rows, cols)), shape = (no_v_dofs, no_p_dofs)) 
+                                   
+    return B_coo
+
 
 
 def assemble_JP(mesh, v_rec, verbose=False):
@@ -957,7 +1010,11 @@ def assemble_JP_fast(mesh, v_rec, glob_dof_table, verbose=False):
        np.array: JP (jump penalization matrix)
     """
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
-    JP = lil_matrix((no_v_dofs, no_v_dofs))
+
+    # data structures for assembly
+    rows = []
+    cols = []
+    data = []
 
     # Ensure edge-to-element connectivity is available
     if not mesh.edge2elem:
@@ -1013,6 +1070,7 @@ def assemble_JP_fast(mesh, v_rec, glob_dof_table, verbose=False):
         # Compute contributions
         for dof_i in dof_table:
             iel_i, loc_dof_i, glob_dof_i, is_shared_i, other_side_i = dof_i
+
             A_11_i0, A_12_i0, A_21_i0, A_22_i0, b_1_i0, b_2_i0 = v_rec[iel_i][loc_dof_i - 1]
             xT_i_0 = mesh.element_barycenter[iel_i]
             A_11_i1, A_12_i1, A_21_i1, A_22_i1, b_1_i1, b_2_i1 = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -1061,11 +1119,16 @@ def assemble_JP_fast(mesh, v_rec, glob_dof_table, verbose=False):
                         dot_product_jumps = pot_jump_i_x * pot_jump_j_x + pot_jump_i_y * pot_jump_j_y
                         integral_prod_jumps += quad_weights[i_quad] * dot_product_jumps
 
-                JP[glob_dof_i - no_p_dofs, glob_dof_j - no_p_dofs] += (
-                    integral_prod_jumps / hE * (1 - 0.5 * is_shared_i) * (1 - 0.5 * is_shared_j)
-                )
+                contrib = integral_prod_jumps / hE * (1 - 0.5 * is_shared_i) * (1 - 0.5 * is_shared_j)
 
-    return JP
+                # assemble 
+                rows.append(glob_dof_i - no_p_dofs)
+                cols.append(glob_dof_j - no_p_dofs)  
+                data.append(contrib)        
+
+    JP_coo = coo_matrix ((data, (rows, cols)), shape=(no_v_dofs, no_v_dofs))
+
+    return JP_coo
 
 def assemble_b_f (mesh, f):
     """
@@ -1079,7 +1142,7 @@ def assemble_b_f (mesh, f):
         np.array(no_v_dofs): vector b
     """
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
-    b = lil_matrix((no_v_dofs, 1))
+    b = np.zeros(no_v_dofs)
 
     for iel in range(len(mesh.elem2node)):
         edge_per_elem = len(mesh.elem2edge[iel])
@@ -1106,7 +1169,7 @@ def assemble_b_gamma(mesh, t_gamma):
         np.array(no_v_dofs): linear system system vector tau
     """
     no_p_dofs, no_v_dofs = count_dof(mesh)[0:2]
-    b_gamma = lil_matrix((no_v_dofs,1))
+    b_gamma = np.zeros(no_v_dofs)
 
     # loop over interface couples
     for icut, cut in enumerate(mesh.cuts):
@@ -1132,8 +1195,8 @@ def assemble_b_gamma(mesh, t_gamma):
             p2 = mesh.coords[mesh.elem2node[iel_in][(local_edge_idx+1)%len(mesh.elem2node[iel_in])]]
             hE = mema.R2_norm(p2-p1)
             # update with contribution
-            b_gamma[shift_dof_x,0] = b_gamma[shift_dof_x,0] + t_gamma[intf_ie][0]*hE
-            b_gamma[shift_dof_y,0] = b_gamma[shift_dof_y,0] + t_gamma[intf_ie][1]*hE
+            b_gamma[shift_dof_x] = b_gamma[shift_dof_x] + t_gamma[intf_ie][0]*hE
+            b_gamma[shift_dof_y] = b_gamma[shift_dof_y] + t_gamma[intf_ie][1]*hE
 
     return b_gamma
 
@@ -1264,18 +1327,76 @@ def impose_bc(mesh, S, b, ref_sol_v, zero_mean=True):
         #b_aug = np.zeros(no_tot_dof + 1)
         S_aug = bmat([[S, None], [None, lil_matrix((1,1))]], format="lil")
         S_aug[0:no_p_dof, no_tot_dof] = 1
-        b_aug = vstack([b, lil_matrix((1, 1))], format="lil")
+        b_aug = np.hstack([b, np.zeros(1)])
 
         #S_aug[0:no_tot_dof, 0:no_tot_dof] = S
         #b_aug[0:no_tot_dof] = b
         
-
         for iel in range(len(mesh.elem2node)):
             mod_T = mesh.element_surface [iel]
             S_aug[no_tot_dof, iel] = mod_T
 
     return [S_aug, b_aug]
 
+def impose_bc_fast(mesh, S_csr, b, ref_sol_v, zero_mean=True):
+    """
+    Forces Dirichlet boundary conditions on velocity
+    Enlarges the system with one line to account for zero mean pressure
+
+    Args:
+        mesh (ddr.Mesh): mesh
+        S    (csr_matrix)
+        b    (np.array): global system vector
+        ref_sol_v  (lambda): reference velocity
+        zero_mean (boolean): True if you want to force zero mean for pressure
+
+    Returns: S (np.array): global system matrix
+             b (np.array): global system array
+    """
+    
+    no_dof_p, no_dof_v, no_tot_dof = count_dof (mesh)
+
+    # force dirichlet boundary conditions on velocity by adapting linear system
+    # use the "penalty" trick: instead of setting the row to zero, blow up the diagonal element
+   
+    AHUGE = 1e12
+    
+    # data structures for the additional term of S, which is AHUGE* a diagonal matrix that has non zero entries along dofs on border
+    rows = []
+    cols = []
+    data = []
+
+    # here I know edges n the border are not shared, but if adapting to other methods, pay attention
+
+    for iel in range(len(mesh.elem2node)):
+        no_edges = len(mesh.elem2edge[iel])
+        for ie in range(no_edges):
+            if (mesh.edge_bnd_mask[mesh.elem2edge[iel][ie]]>0):
+
+                # get v dofs
+                [dof1, dof2] = get_edge_dofs(mesh, iel, ie)
+
+                # get position of edge
+                glob_ie = mesh.elem2edge[iel][ie]
+                [x, y] = mesh.edge_xE[glob_ie]
+
+                # assemble diagonal terms
+                rows.append(dof1)
+                cols.append(dof1)
+                data.append(AHUGE)
+
+                rows.append(dof2)
+                cols.append(dof2)
+                data.append(AHUGE)
+ 
+                # adapt rhs
+                b[dof1] = AHUGE*ref_sol_v(x, y)[0]
+                b[dof2] = AHUGE*ref_sol_v(x, y)[1]
+
+    S_bc_coo = coo_matrix ((data, (rows, cols)), shape = (no_tot_dof+1, no_tot_dof+1))
+    S_bc_csr = S_bc_coo.tocsr()
+
+    return [S_csr + S_bc_csr, b]
 
 
 def visualize_solution (mesh, v_p, fig, axes, cmaps = ["magma", "viridis"], arrows="edge", arrow_density = 6):
@@ -1312,8 +1433,8 @@ def visualize_solution (mesh, v_p, fig, axes, cmaps = ["magma", "viridis"], arro
     # On first axes represent velocity (colormap on elements + arrows along interface)
     ax = axes[0]
     cmap = plt.get_cmap(cmaps[0])
-    ax.set_xlim(-0.5, 0.5)
-    ax.set_ylim(-0.5, 0.5)
+#    ax.set_xlim(-0.5, 0.5)
+#    ax.set_ylim(-0.5, 0.5)
     ax.set_aspect('equal')
 
     max_v = np.max(v_T_norm)
@@ -1539,7 +1660,7 @@ def solve_stokes (mesh, ref_sol_v, vol_force, nu_in, nu_ex, intface = None,\
 
 def solve_stokes_fast (mesh, ref_sol_v, vol_force, nu_in, nu_ex,\
                        intface = None, with_surface_tension = False,\
-                       external_tension = None, jump_penalization = False):
+                       external_tension = None, jump_penalization = False, solver_type = "SPSOLVE", verbose=False):
     """
     Solve Stokes problem with an interface and surface tension
 
@@ -1591,12 +1712,48 @@ def solve_stokes_fast (mesh, ref_sol_v, vol_force, nu_in, nu_ex,\
         v_rec.append(element_recs)
 
     # Assemble matrices and vector of linear system
-    A = assemble_A_fast (mesh, v_rec, nu_in, nu_ex)
-    B = assemble_B (mesh)
+    # Matrices are assembled as coo_matrix (best sparse format for assembling)
+    # Vectors are assembled as numpy arrays
+    # local contribitions in v*v block take into account boundary condition
+
+    if (verbose):
+        print (">>> Assembling A, B")
+
+    A_coo = assemble_A_fast (mesh, v_rec, nu_in, nu_ex)
+
+    if (verbose):
+        print (">>>> nonzero entries of A: ", A_coo.nnz)
+
     if (jump_penalization):
-        JP = assemble_JP_fast (mesh, v_rec, glob_dof_table, verbose=False)
+       if (verbose):
+           print (">>> Assembling JP (stabilization)")
+       JP_coo = assemble_JP_fast (mesh, v_rec, glob_dof_table, verbose=False)
+       # sum A and JP
+       A_coo = A_coo + JP_coo
     else:
-        JP = 0*A
+        JP = 0
+    A_csr = A_coo.tocsr()     
+
+    B_coo = assemble_B_fast (mesh)
+    B_csr = B_coo.tocsr()
+   
+    # assemble global system (follow convention (p, v, lambda) for block ordering)
+
+    areas_np = np.zeros(no_dof_p)
+    for iel in range(len(mesh.elem2node)):
+        areas_np[iel] = mesh.element_surface [iel]
+
+    areas_csr = csr_matrix(areas_np.reshape(1, -1))
+    zero_scalar = csr_matrix((1, 1))        
+
+    S_csr= bmat([[None, B_csr.T, areas_csr.T],\
+                 [B_csr, A_csr, None],\
+                 [areas_csr, None, zero_scalar]], format="csr")
+
+    # r.h.s.
+
+    if (verbose):
+        print(">>> Assembling r.h.s.")
     b_f = assemble_b_f (mesh, vol_force)
     if (with_surface_tension):
         t_gamma = intface.calc_t_gamma()
@@ -1608,22 +1765,25 @@ def solve_stokes_fast (mesh, ref_sol_v, vol_force, nu_in, nu_ex,\
 
     b_v = b_f
     b_v = b_f + b_gamma 
+    b_p = np.zeros(no_dof_p)
+    b_lambda = np.zeros(1)
+    b = np.concatenate([b_p, b_v, b_lambda])
 
-    # build global system (follow convention (p, v) for block ordering)
+    # impose BCs 
+    [S_csr, b] = impose_bc_fast(mesh, S_csr, b, ref_sol_v)
+   
 
-    # zero_block = lil_matrix((no_dof_p, no_dof_p))
-    S = bmat([[None, B.transpose()], [B, A + JP]], format="lil")
-    b_p = lil_matrix((no_dof_p,1))
-    b = vstack([b_p, b_v], format = "lil")
+    ## solve (pay attention to Lagrange multiplier)
+    if verbose:
+        print (">>> Solving sparse system")
+    if (solver_type=="MINRES"):
+        p_v_lambda, info = minres (S_csr, b)
+        if info > 0: 
+             print (">>>> MINRES not converged")
+    else:
+        p_v_lambda = spsolve(S_csr, b)
 
-    # Enforce boundary conditions (dirichlet bnd conds on velocity, zero avg cond on pressure)
-    ## attention, system dimension augmented by 1 to account for a Lagrange multiplier
-    [S, b] = impose_bc(mesh, S, b, ref_sol_v)
-
-    ## Convert to csr and solve (pay attention to Lagrange multiplier)
-    p_v_lambda = spsolve(S.tocsr(), b.tocsr())
-
-    return [p_v_lambda, S, b, A, B, JP, b_gamma]
+    return [p_v_lambda, S_csr, b, A_coo, B_coo, JP_coo, b_gamma]
 
 def elem_velocity_energy_norm (mesh, iel, v_h):
     """
