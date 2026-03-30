@@ -47,7 +47,7 @@ Modules
 Module: mesh_manager
 --------------------
 
-.. automodule:: mesh_manager
+.. automodule:: polymemb.mesh_manager
    :members:
    :undoc-members:
    :show-inheritance:
@@ -55,14 +55,23 @@ Module: mesh_manager
 
 Module: solvers
 ---------------
+.. automodule:: polymemb.solvers
+   :members:
+   :undoc-members:
+   :imported-members:
+   :show-inheritance:
 
-.. automodule:: solvers.hho
+HHO Stokes
+~~~~~~~~~~
+.. automodule:: polymemb.solvers.hho
    :members:
    :undoc-members:
    :show-inheritance:
    :imported-members:
 
-.. automodule:: solvers.ddr
+DDR Elliptic Interface
+~~~~~~~~~~~~~~~~~~~~~~
+.. automodule:: polymemb.solvers.ddr
    :members:
    :undoc-members:
    :show-inheritance:
